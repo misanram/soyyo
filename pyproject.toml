@@ -14,7 +14,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 license = "GPL-3.0-or-later"
-license-files = ["LICENSE"]
+license-files = ["LICENSE.md"]
 dynamic = ['dependencies', 'readme', 'optional-dependencies']
 version = "0.1.0"
 
@@ -34,7 +34,4 @@ where = ["."]
 
 [project.scripts]
 soyyo = "soyyo.app:main"
-#
-#[tool.ruff]
-#line-length = 120
-#target-version = "py312"
+
