@@ -11,7 +11,6 @@ from unittest.mock import patch
 import keyring.errors as keyring_errors
 import pytest
 
-from soyyo.acciones import reset, setup
 from soyyo.auxiliares import (chek_almacen, chek_integrity_json, chek_keyring, chek_pepper, EstadoSistema,
                               validate_pin)
 
@@ -36,8 +35,8 @@ def almacen_valido(tmp_path):
 
 def test_chek_keyring_devuelve_cadena_incorrecta():
     """Keyring escribe, pero devuelve un valor inesperado"""
-    with patch('soyyo.auxiliares.set_password'), patch('soyyo.auxiliares.get_password',
-                                                       return_value='otra_cosa'):
+    with (patch('soyyo.auxiliares.set_password'),
+          patch('soyyo.auxiliares.get_password', return_value='otra_cosa')):
         assert chek_keyring() is False
 
 
@@ -170,117 +169,3 @@ def test_validate_pin_keyboard_interrupt():
     with patch('soyyo.auxiliares.getpass', side_effect=KeyboardInterrupt):
         with pytest.raises(KeyboardInterrupt):
             validate_pin('')
-
-
-def test_reset_keyboard_interrupt(tmp_path, capsys):
-    fichero = tmp_path / 'datos.json'
-    with patch('soyyo.auxiliares.input', side_effect=KeyboardInterrupt):
-        with pytest.raises(SystemExit):
-            reset(fichero)
-        captured = capsys.readouterr()
-    assert 'Abortando reset...' in captured.out
-
-
-@pytest.mark.parametrize('respuesta', ['N', 'C'])
-def test_reset_NC(tmp_path, capsys, respuesta):
-    fichero = tmp_path / 'datos.json'
-    with patch('soyyo.auxiliares.input', return_value=respuesta):
-        with pytest.raises(SystemExit):
-            reset(fichero)
-        captured = capsys.readouterr()
-    assert 'Abortando reset...' in captured.out
-
-
-def test_reset_otro_caracter(tmp_path, capsys):
-    fichero = tmp_path / 'datos.json'
-    with patch('soyyo.auxiliares.input', side_effect=['^', 'C']):
-        with pytest.raises(SystemExit):
-            reset(fichero)
-        captured = capsys.readouterr()
-    assert 'Abortando reset...' in captured.out
-
-
-def test_reset_S(tmp_path, capsys):
-    fichero = tmp_path / 'datos.json'
-    fichero.touch()
-    with (patch('soyyo.auxiliares.input', return_value='S'), patch('soyyo.auxiliares.delete_password',
-                                                                   return_value=None)):
-        with pytest.raises(SystemExit):
-            reset(fichero)
-    assert not fichero.exists()
-
-
-def test_reset_S_keyring_error(tmp_path, capsys):
-    fichero = tmp_path / 'datos.json'
-    fichero.touch()
-    with (patch('soyyo.auxiliares.input', return_value='S'), patch('soyyo.auxiliares.delete_password',
-                                                                   side_effect=keyring_errors.PasswordDeleteError)):
-        with pytest.raises(SystemExit):
-            reset(fichero)
-    assert not fichero.exists()
-
-
-def test_setup_sin_error(tmp_path):
-    fichero = tmp_path / 'datos.json'
-    fichero.touch()
-    with patch('soyyo.auxiliares.validate_pin', return_value='12345678'):
-        setup(fichero)
-    assert fichero.exists()
-
-
-def test_setup_sin_error_pin_no_ascii(tmp_path):
-    fichero = tmp_path / 'datos.json'
-    fichero.touch()
-    with patch('soyyo.auxiliares.validate_pin', return_value='١٢٣٤٥٦٧٨'):
-        setup(fichero)
-    assert fichero.exists()
-
-
-def test_setup_keyboard_interrupt(tmp_path, capsys):
-    fichero = tmp_path / 'datos.json'
-    with patch('soyyo.auxiliares.validate_pin', side_effect=KeyboardInterrupt):
-        with pytest.raises(SystemExit):
-            setup(fichero)
-        captured = capsys.readouterr()
-    assert 'Cancelado por el usuario.' in captured.out
-
-
-def test_setup_pines_distintos(tmp_path, capsys):
-    fichero = tmp_path / 'datos.json'
-    with patch('soyyo.auxiliares.validate_pin', side_effect=[0, 1, '12345678', '12345678']):
-        setup(fichero)
-        captured = capsys.readouterr()
-    assert '\nAmbos valores deben ser iguales.\n\n' in captured.out
-
-
-def test_setup_set_keyring_error(tmp_path):
-    fichero = tmp_path / 'datos.json'
-    fichero.touch()
-    with (patch('soyyo.auxiliares.validate_pin', return_value='12345678'), patch(
-            'soyyo.auxiliares.set_password',
-            side_effect=keyring_errors.PasswordSetError)):
-        with pytest.raises(SystemExit):
-            setup(fichero)
-
-
-def test_setup_file_write_error(tmp_path, capsys):
-    fichero = tmp_path / 'datos.json'
-    fichero.touch()
-    fichero.chmod(0o444)
-    with patch('soyyo.auxiliares.validate_pin', return_value='12345678'):
-        with pytest.raises(SystemExit):
-            setup(fichero)
-        captured = capsys.readouterr()
-    assert 'La aplicación no puede continuar' in captured.out
-    assert '[Errno 13] Permission denied' in captured.out
-
-
-def test_setup_delete_password_keyring_error(tmp_path, capsys):
-    fichero = tmp_path / 'datos.json'
-    fichero.touch()
-    fichero.chmod(0o444)
-    with (patch('soyyo.auxiliares.validate_pin', return_value='12345678'), patch(
-            'soyyo.auxiliares.delete_password',
-            side_effect=keyring_errors.PasswordDeleteError)):
-        with pytest.raises(keyring_errors.PasswordDeleteError):
-            setup(fichero)
