@@ -43,12 +43,12 @@ class Aplicacion:
     Clase principal del programa
     """
 
-    def __init__(self):
+    def __init__(self, args):
         root_path = Path(sys.prefix)
-        bin_path = Path(sys.executable).parent
-        self.app_executable = bin_path / 'soyyo'
+        # bin_path = Path(sys.executable).parent
+        # self.app_executable = bin_path / 'soyyo'
         self.data_path = root_path / 'soyyo_data.json'
-        self.args = get_options()
+        self.args = args
 
     def _comprueba_estado(self):
         try:
@@ -113,7 +113,7 @@ def main():
     Arranca el programa
     """
 
-    aplicacion = Aplicacion()
+    aplicacion = Aplicacion(get_options())
     aplicacion.run()
 
 

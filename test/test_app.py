@@ -24,14 +24,14 @@ def test_get_options_reset():
 
 def test__comprueba_estado_sin_keyring():
     with patch('soyyo.app.get_options'), patch('soyyo.app.chek_keyring', return_value=False):
-        app = Aplicacion()
+        app = Aplicacion(None)
         assert app._comprueba_estado() == EstadoSistema.SIN_KEYRING
 
 
 def test__comprueba_estado_primer_arranque():
     with (patch('soyyo.app.get_options'), patch('soyyo.app.chek_keyring', return_value=True),
           patch('soyyo.app.chek_almacen', return_value=False)):
-        app = Aplicacion()
+        app = Aplicacion(None)
         assert app._comprueba_estado() == EstadoSistema.PRIMER_ARRANQUE
 
 
@@ -39,7 +39,7 @@ def test__comprueba_estado_sin_pepper():
     with (patch('soyyo.app.get_options'), patch('soyyo.app.chek_keyring', return_value=True),
           patch('soyyo.app.chek_almacen', return_value=True),
           patch('soyyo.app.chek_pepper', return_value=False)):
-        app = Aplicacion()
+        app = Aplicacion(None)
         assert app._comprueba_estado() == EstadoSistema.SIN_PEPPER
 
 
@@ -48,7 +48,7 @@ def test__comprueba_estado_fichero_corrupto():
           patch('soyyo.app.chek_almacen', return_value=True),
           patch('soyyo.app.chek_pepper', return_value=True),
           patch('soyyo.app.chek_integridad_json', return_value=False)):
-        app = Aplicacion()
+        app = Aplicacion(None)
         assert app._comprueba_estado() == EstadoSistema.FICHERO_CORRUPTO
 
 
@@ -58,7 +58,7 @@ def test__comprueba_estado_firma_invalida():
           patch('soyyo.app.chek_pepper', return_value=True),
           patch('soyyo.app.chek_integridad_json', return_value=True),
           patch('soyyo.app.chek_firma', return_value=False)):
-        app = Aplicacion()
+        app = Aplicacion(None)
         assert app._comprueba_estado() == EstadoSistema.FIRMA_INVALIDA
 
 
@@ -68,7 +68,7 @@ def test__comprueba_estado_todo_ok():
           patch('soyyo.app.chek_pepper', return_value=True),
           patch('soyyo.app.chek_integridad_json', return_value=True),
           patch('soyyo.app.chek_firma', return_value=True)):
-        app = Aplicacion()
+        app = Aplicacion(None)
         assert app._comprueba_estado() == EstadoSistema.OK
 
 
@@ -80,7 +80,7 @@ def test__comprueba_estado_exception_en_chek(capsys):
           patch('soyyo.app.chek_firma', side_effect=Exception)):
         with pytest.raises(SystemExit):
             main()
-            app = Aplicacion()
+            app = Aplicacion(None)
             app._comprueba_estado()
     captured = capsys.readouterr()
     assert 'La aplicación no puede continuar.' in captured.out
