@@ -61,7 +61,7 @@ def test_reset_otro_caracter(tmp_path, capsys):
     assert 'Abortando reset...' in captured.out
 
 
-def test_reset_S(tmp_path, capsys):
+def test_reset_S(tmp_path):
     fichero = tmp_path / 'datos.json'
     fichero.touch()
     with (patch('soyyo.acciones.input', return_value='S'),
@@ -70,7 +70,7 @@ def test_reset_S(tmp_path, capsys):
     assert respuesta == EstadoSistema.PRIMER_ARRANQUE
 
 
-def test_reset_S_keyring_error(tmp_path, capsys):
+def test_reset_S_keyring_error(tmp_path):
     fichero = tmp_path / 'datos.json'
     fichero.touch()
     with (patch('soyyo.acciones.input', return_value='S'),
@@ -134,7 +134,7 @@ def test_setup_file_write_error(tmp_path, capsys):
     assert '[Errno 13] Permission denied' in captured.out
 
 
-def test_setup_delete_password_keyring_error(tmp_path, capsys):
+def test_setup_delete_password_keyring_error(tmp_path):
     fichero = tmp_path / 'datos.json'
     fichero.touch()
     fichero.chmod(0o444)

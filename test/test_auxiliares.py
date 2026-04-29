@@ -99,13 +99,13 @@ def test_chek_integridad_json_existe_es_corrupto(tmp_path):
     assert chek_integridad_json(fichero) is False
 
 
-def test_chek_firma_OK(almacen_valido, capsys):
+def test_chek_firma_OK(almacen_valido):
     fichero, pepper = almacen_valido
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
         assert chek_firma(fichero) is True
 
 
-def test_chek_firma_manipulada(almacen_valido, capsys):
+def test_chek_firma_manipulada(almacen_valido):
     fichero, pepper = almacen_valido
     datos = json.loads(fichero.read_text(encoding='utf8'))
     datos['intentos'] = 99
@@ -115,7 +115,7 @@ def test_chek_firma_manipulada(almacen_valido, capsys):
         assert chek_firma(fichero) is False
 
 
-def test_chek_firma_sin_pepper(almacen_valido, capsys):
+def test_chek_firma_sin_pepper(almacen_valido):
     fichero, pepper = almacen_valido
     with patch('soyyo.auxiliares.get_password', return_value=None):
         with pytest.raises(TypeError):
