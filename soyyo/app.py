@@ -9,9 +9,10 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from soyyo.acciones import reset, setup
-from soyyo.auxiliares import (chek_almacen, chek_integrity_json, chek_keyring, chek_pepper)
+from soyyo.auxiliares import (chek_almacen, chek_firma, chek_integridad_json, chek_keyring,
+                              chek_pepper)
 from soyyo.estados import EstadoSistema
-from soyyo.mensajes import MSG_FICHERO_CORRUPTO, MSG_FIRMA_INVALIDA, MSG_SIN_KEYRING
+from soyyo.mensajes import MSG_FICHERO_CORRUPTO, MSG_FIRMA_INVALIDA, MSG_SIN_KEYRING, MSG_SIN_PEPPER
 
 log = logging.getLogger(__name__)
 file_handler = RotatingFileHandler('soyyo.log', maxBytes=1_000_000, backupCount=5)
@@ -50,13 +51,24 @@ class Aplicacion:
         self.args = get_options()
 
     def _comprueba_estado(self):
-        if not chek_keyring():
-            return EstadoSistema.SIN_KEYRING
-        if not chek_almacen(self.data_path):
-            return EstadoSistema.PRIMER_ARRANQUE
-        if not chek_pepper():
-            return EstadoSistema.SIN_PEPPER
-        return chek_integrity_json(self.data_path)
+        try:
+            if not chek_keyring():
+                return EstadoSistema.SIN_KEYRING
+            elif not chek_almacen(self.data_path):
+                return EstadoSistema.PRIMER_ARRANQUE
+            elif not chek_pepper():
+                return EstadoSistema.SIN_PEPPER
+            elif not chek_integridad_json(self.data_path):
+                return EstadoSistema.FICHERO_CORRUPTO
+            elif not chek_firma(self.data_path):
+                return EstadoSistema.FIRMA_INVALIDA
+            else:
+                return EstadoSistema.OK
+        except Exception as error:
+            log.exception(error)
+            print(error)
+            print('La aplicación no puede continuar.')
+            sys.exit(1)
 
     def run(self):
         """
@@ -68,14 +80,16 @@ class Aplicacion:
 
         if self.args.reset and estado not in (EstadoSistema.SIN_KEYRING, EstadoSistema.PRIMER_ARRANQUE):
             estado = reset(self.data_path)
+            log.debug(estado)
 
         while True:
             if estado == EstadoSistema.SIN_KEYRING:
                 print(MSG_SIN_KEYRING)
                 sys.exit(1)
 
-            elif estado == EstadoSistema.PRIMER_ARRANQUE:
-                estado = setup(self.data_path)
+            elif estado == EstadoSistema.SIN_PEPPER:
+                print(MSG_SIN_PEPPER)
+                sys.exit(1)
 
             elif estado == EstadoSistema.FICHERO_CORRUPTO:
                 print(MSG_FICHERO_CORRUPTO)
@@ -85,9 +99,13 @@ class Aplicacion:
                 print(MSG_FIRMA_INVALIDA)
                 sys.exit(1)
 
+            elif estado == EstadoSistema.PRIMER_ARRANQUE:
+                estado = setup(self.data_path)
+
             elif estado == EstadoSistema.OK:
                 print(not all(vars(self.args).values()))
                 break
+            log.debug(estado)
 
 
 def main():

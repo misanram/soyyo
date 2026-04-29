@@ -6,14 +6,11 @@ import base64
 import hmac
 import json
 import logging
-import sys
 import time
 from getpass import getpass
 
 import keyring.errors as keyring_errors
 from keyring import get_password, set_password
-
-from soyyo.estados import EstadoSistema
 
 log = logging.getLogger(__name__)
 
@@ -47,34 +44,34 @@ def chek_pepper():
     return get_password('soyyo', 'pepper') is not None
 
 
-def chek_integrity_json(data_path):
+def chek_integridad_json(data_path):
+    """
+    Comprueba que el fichero de datos es json es válido
+    """
+
+    try:
+        with open(data_path, 'r', encoding='utf8') as fin:
+            json.load(fin)
+            return True
+    except json.JSONDecodeError:
+        return False
+
+
+def chek_firma(data_path):
     """
     Comprueba que la firma del json es válida (que el .json no ha sido manipulado)
     """
 
-    try:
-        try:
-            with open(data_path, 'r', encoding='utf8') as fin:
-                datos = json.load(fin)
-        except json.JSONDecodeError:
-            return EstadoSistema.FICHERO_CORRUPTO
+    with open(data_path, 'r', encoding='utf8') as fin:
+        datos = json.load(fin)
+    firma = datos.get('firma')
+    del datos['firma']
 
-        firma = datos.get('firma')
-        del datos['firma']
+    cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
+    pepper = get_password('soyyo', 'pepper')
+    nueva_firma = hmac.new(base64.b64decode(pepper), cadena_json, 'sha512').hexdigest()  # type: ignore
 
-        cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
-        pepper = get_password('soyyo', 'pepper')
-        nueva_firma = hmac.new(base64.b64decode(pepper), cadena_json, 'sha512').hexdigest()  # type: ignore
-
-        if hmac.compare_digest(firma, nueva_firma):
-            return EstadoSistema.OK
-        return EstadoSistema.FIRMA_INVALIDA
-
-    except Exception as error:
-        log.exception(error)
-        print(error)
-        print('La aplicación no puede continuar.')
-        sys.exit(1)
+    return hmac.compare_digest(firma, nueva_firma)
 
 
 def validate_pin(prompt_head):

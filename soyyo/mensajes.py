@@ -1,5 +1,5 @@
 """
-Mensajes que muestra el programa (esto puede que deaparezca o no....)
+Mensajes que muestra el programa (esto puede que deaparezca o no...)
 """
 
 MSG_SIN_KEYRING = """
@@ -7,13 +7,19 @@ MSG_SIN_KEYRING = """
         La aplicación no puede continuar.
         Para instalar uno consulte con el administrador de su sistema."""
 
+MSG_SIN_PEPPER = """
+    No hay clave de firma en el sistema de almacenamiento seguro del sistema.
+        Las semillas almacenadas no son legibles
+        Debe resetar la aplicación.
+"""
+
 MSG_FICHERO_CORRUPTO = """
-    El almacen de datos es ilegible o está corrupto.
+    El almacén de datos es ilegible o está corrupto.
         Las semillas almacenadas no son legibles
         Debe resetar la aplicación."""
 
 MSG_FIRMA_INVALIDA = """
-    El almacen de datos es parece haber sido manipulado.
+    El almacén de datos parece haber sido manipulado.
         Las semillas almacenadas no son legibles
         Debe resetar la aplicación."""
 

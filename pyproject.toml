@@ -19,7 +19,7 @@ dynamic = ['dependencies', 'readme', 'optional-dependencies']
 version = "0.1.0"
 
 [project.urls]
-Homepage = "https://github.com/misanram/soyyo.git"
+Homepage = "https://github.com/misanram/soyyo"
 
 [tool.setuptools.dynamic]
 readme = { file = ['README.md', ] }

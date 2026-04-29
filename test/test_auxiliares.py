@@ -11,7 +11,7 @@ from unittest.mock import patch
 import keyring.errors as keyring_errors
 import pytest
 
-from soyyo.auxiliares import (chek_almacen, chek_integrity_json, chek_keyring, chek_pepper, EstadoSistema,
+from soyyo.auxiliares import (chek_almacen, chek_firma, chek_integridad_json, chek_keyring, chek_pepper,
                               validate_pin)
 
 
@@ -79,46 +79,47 @@ def test_chek_pepper_hay_pepper():
         assert chek_pepper() is True
 
 
-def test_chek_integrity_sin_pepper(almacen_valido, capsys):
-    fichero, pepper_64 = almacen_valido
-    with patch('soyyo.auxiliares.get_password', return_value=None):
-        with pytest.raises(SystemExit):
-            chek_integrity_json(fichero)
-        captured = capsys.readouterr()
-        assert 'La aplicación no puede continuar.' in captured.out
+def test_chek_integridad_json_existe_es_valido(almacen_valido):
+    """El fichero de datos no existe"""
+    fichero, pepper = almacen_valido
+    assert chek_integridad_json(fichero) is True
 
 
-def test_chek_integrity_fichero_no_existe(tmp_path, capsys):
+def test_chek_integridad_json_no_existe(tmp_path):
     """El fichero de datos no existe"""
     fichero = tmp_path / 'datos.json'
-    with pytest.raises(SystemExit):
-        chek_integrity_json(fichero)
-    captured = capsys.readouterr()
-    assert 'La aplicación no puede continuar.' in captured.out
+    with pytest.raises(FileNotFoundError):
+        chek_integridad_json(fichero)
 
 
-def test_chek_integrity_json_corrupto(tmp_path, capsys):
+def test_chek_integridad_json_existe_es_corrupto(tmp_path):
     """El fichero no es JSON válido"""
     fichero = tmp_path / 'datos.json'
     fichero.write_text('esto no es json', encoding='utf8')
-    with patch('soyyo.auxiliares.get_password', return_value='cGVwcGVy'):
-        assert chek_integrity_json(fichero) == EstadoSistema.FICHERO_CORRUPTO
+    assert chek_integridad_json(fichero) is False
 
 
-def test_chek_integrity_todo_OK(almacen_valido, capsys):
-    fichero, pepper_64 = almacen_valido
-    with patch('soyyo.auxiliares.get_password', return_value=pepper_64):
-        assert chek_integrity_json(fichero) == EstadoSistema.OK
+def test_chek_firma_OK(almacen_valido, capsys):
+    fichero, pepper = almacen_valido
+    with patch('soyyo.auxiliares.get_password', return_value=pepper):
+        assert chek_firma(fichero) is True
 
 
-def test_chek_integrity_firma_manipulada(almacen_valido, capsys):
-    fichero, pepper_64 = almacen_valido
+def test_chek_firma_manipulada(almacen_valido, capsys):
+    fichero, pepper = almacen_valido
     datos = json.loads(fichero.read_text(encoding='utf8'))
     datos['intentos'] = 99
     with open(fichero, 'w', encoding='utf8') as fout:
         json.dump(datos, fout, sort_keys=True, separators=(',', ':'))
-    with patch('soyyo.auxiliares.get_password', return_value=pepper_64):
-        assert chek_integrity_json(fichero) == EstadoSistema.FIRMA_INVALIDA
+    with patch('soyyo.auxiliares.get_password', return_value=pepper):
+        assert chek_firma(fichero) is False
+
+
+def test_chek_firma_sin_pepper(almacen_valido, capsys):
+    fichero, pepper = almacen_valido
+    with patch('soyyo.auxiliares.get_password', return_value=None):
+        with pytest.raises(TypeError):
+            chek_firma(fichero)
 
 
 def test_validate_pin_pin_valido():
