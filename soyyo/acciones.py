@@ -68,7 +68,6 @@ def setup(data_path):
     except keyring_errors.PasswordSetError as error:
         log.error(error)
         print(error)
-        print('La aplicación no puede continuar.')
         return EstadoSistema.SALIENDO_ERROR
 
     try:
