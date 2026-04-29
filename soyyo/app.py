@@ -8,7 +8,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from soyyo.acciones import reset, setup
+from soyyo.acciones import captura, reset, setup
 from soyyo.auxiliares import (chek_almacen, chek_firma, chek_integridad_json, chek_keyring,
                               chek_pepper)
 from soyyo.estados import EstadoSistema
@@ -34,8 +34,8 @@ def get_options():
     parser = argparse.ArgumentParser(prog='soyyo', usage='%(prog)s [opción]',
                                      description='Programa para hacer TOTP', epilog='', )
     grupo = parser.add_mutually_exclusive_group()
-    # grupo.add_argument('--setup', action='store_true', help='Configuración del programa.')
     grupo.add_argument('--reset', action='store_true', help='Reinicia el programa a su estado de fábrica.')
+    grupo.add_argument('--captura', action='store_true', help='Captura un QR.')
     args = parser.parse_args()
     return args
 
@@ -112,8 +112,11 @@ class Aplicacion:
                 estado = setup(self.data_path)
 
             elif estado == EstadoSistema.OK:
-                print(not all(vars(self.args).values()))
-                break
+                if self.args.captura:
+                    estado = captura(self.data_path)
+                else:
+                    print(not all(vars(self.args).values()))
+                    break
             log.debug(estado)
 
 

@@ -90,7 +90,18 @@ def test_run_reset(capsys):
           ):
         main()
     captured = capsys.readouterr()
-    assert 'False' in captured.out
+    assert 'True' in captured.out
+
+
+def test_run_captura(capsys):
+    with (patch.object(Aplicacion, '_comprueba_estado', return_value=EstadoSistema.OK),
+          patch('sys.argv', ['soyyo', '--captura']),
+          patch('soyyo.app.captura', return_value=EstadoSistema.SALIENDO_OK),
+          ):
+        with pytest.raises(SystemExit):
+            main()
+    captured = capsys.readouterr()
+    assert 'Aplicación finalizada' in captured.out
 
 
 def test_run_sin_key_ring(capsys):

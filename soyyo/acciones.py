@@ -11,6 +11,8 @@ import logging
 import os
 import sys
 import time
+import tkinter as tk
+from tkinter import ttk
 
 import keyring.errors as keyring_errors
 from keyring import delete_password, set_password
@@ -20,6 +22,58 @@ from soyyo.estados import EstadoSistema
 from soyyo.mensajes import MSG_PROMPT_RESET, MSG_SETUP
 
 log = logging.getLogger(__name__)
+
+
+class VentanaCaptura(ttk.Frame):
+    """
+    Clase para capturar pantalla con código QR
+
+    """
+
+    def __init__(self, master=None):
+        super().__init__(master)
+        self.grid(column=0, row=0, sticky=tk.NSEW)
+        self._crearWidgets()
+        top = self.winfo_toplevel()
+        top.rowconfigure(0, weight=1)
+        top.columnconfigure(0, weight=1)
+        top.resizable(height=tk.TRUE, width=tk.TRUE)
+        top.minsize(200, 210)
+        top.title('soyyo captura de QR')
+        top.protocol("WM_DELETE_WINDOW", self._cerrar)
+        top.wait_visibility()
+        top.attributes('-alpha', 0.5)
+
+    def _cerrar(self):
+        self.quit()
+
+    def _capturar(self):
+        pass
+
+    def _crearWidgets(self):
+        self.rowconfigure(0, weight=1)
+        self.rowconfigure(1, weight=0)
+        self.columnconfigure(0, weight=1)
+
+        self.frame_visor = ttk.Frame(self)
+        self.frame_visor.grid(row=0, column=0, sticky=tk.NSEW)
+        self.frame_visor.rowconfigure(0, weight=1)
+        self.frame_visor.columnconfigure(0, weight=1)
+
+        self.canvas = tk.Canvas(self.frame_visor, bg='gray')
+        self.canvas.grid(row=0, column=0, sticky=tk.NSEW)
+
+        self.frame_botones = ttk.Frame(self)
+        self.frame_botones.columnconfigure(0, weight=1)
+        self.frame_botones.grid(row=1, column=0, sticky=tk.EW)
+
+        self.boton_cancelar = ttk.Button(self.frame_botones, text='Cancelar', command=self._cerrar)
+        self.boton_cancelar.grid(row=0, column=1, pady=5, padx=5, sticky=tk.EW)
+        self.frame_botones.columnconfigure(1, weight=1)
+
+        self.boton_captura = ttk.Button(self.frame_botones, text='Capturar', command=self._capturar)
+        self.boton_captura.grid(row=0, column=0, pady=5, padx=5, sticky=tk.EW)
+        self.frame_botones.columnconfigure(0, weight=1)
 
 
 def setup(data_path):
@@ -112,3 +166,14 @@ def reset(data_path):
             return EstadoSistema.PRIMER_ARRANQUE
         else:
             return EstadoSistema.SALIENDO_OK
+
+
+def captura(data_path):
+    """
+    Captura el QR de un secreto TOTP
+    """
+
+    ventana = VentanaCaptura()
+    ventana.mainloop()
+
+    return EstadoSistema.SALIENDO_OK

@@ -24,10 +24,12 @@ MSG_FIRMA_INVALIDA = """
         Debe resetar la aplicación."""
 
 MSG_SALIENDO_OK = """
-    Aplicación finalizada."""
+    Aplicación finalizada.
+    """
 
 MSG_SALIENDO_ERROR = """
-    La aplicación no puede continuar debido a un error."""
+    La aplicación no puede continuar debido a un error.
+    """
 
 MSG_SETUP = """
     Debe crear un PIN para usar la aplicación.
@@ -44,7 +46,7 @@ MSG_PROMPT_RESET = """
 
         Ha solicitado eliminar por completo toda la configuración.
 
-        Ello eliminará todas sus secreto TOTP almacenados
+        Ello eliminará todas sus secreto TOTP almacenados.
 
         Este paso es irreversible.
         Si/No/Cancelar: """
