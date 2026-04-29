@@ -116,6 +116,7 @@ def test_setup_file_write_error(tmp_path, capsys):
     fichero.touch()
     fichero.chmod(0o444)
     with (patch('soyyo.acciones.set_password'),
+          patch('soyyo.acciones.delete_password'),
           patch('soyyo.acciones.validate_pin', return_value='12345678')):
         assert setup(fichero) == EstadoSistema.SALIENDO_ERROR
 
