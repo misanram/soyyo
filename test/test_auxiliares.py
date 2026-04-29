@@ -21,11 +21,11 @@ def almacen_valido(tmp_path):
     pepper = os.urandom(32)
     pepper_64 = base64.b64encode(pepper).decode('utf-8')
 
-    datos = {'version': 1, 'autorizacion': {}, 'intentos': 0, 'semillas': {}}
+    datos = {'version': 1, 'autorizacion': {}, 'intentos': 0, 'totp': {}}
     cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
     firma = hmac.new(pepper, cadena_json, 'sha512').hexdigest()
 
-    datos = {'version': 1, 'autorizacion': {}, 'intentos': 0, 'semillas': {}, 'firma': firma}
+    datos = {'version': 1, 'autorizacion': {}, 'intentos': 0, 'totp': {}, 'firma': firma}
     fichero = tmp_path / 'datos.json'
     with open(fichero, 'w', encoding='utf8') as fout:
         json.dump(datos, fout, sort_keys=True, separators=(',', ':'))

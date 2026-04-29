@@ -1,1 +1,5 @@
+cryptography
 keyring
+pillow
+pyotp
+pyzbar

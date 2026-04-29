@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.WARNING,
                     force=True,
                     format='%(asctime)s [%(name)s] %(levelname)s: %(message)s'
                     )
-log.setLevel(logging.DEBUG)
+logging.getLogger('soyyo').setLevel(logging.DEBUG)
 
 
 def get_options():

@@ -9,18 +9,18 @@ MSG_SIN_KEYRING = """
 
 MSG_SIN_PEPPER = """
     No hay clave de firma en el sistema de almacenamiento seguro del sistema.
-        Las semillas almacenadas no son legibles
+        Los datos TOTP almacenados no son legibles
         Debe resetar la aplicación.
 """
 
 MSG_FICHERO_CORRUPTO = """
     El almacén de datos es ilegible o está corrupto.
-        Las semillas almacenadas no son legibles
+        Los datos TOTP almacenados no son legibles
         Debe resetar la aplicación."""
 
 MSG_FIRMA_INVALIDA = """
     El almacén de datos parece haber sido manipulado.
-        Las semillas almacenadas no son legibles
+        Los datos TOTP almacenados no son legibles
         Debe resetar la aplicación."""
 
 MSG_SALIENDO_OK = """

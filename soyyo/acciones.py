@@ -15,7 +15,10 @@ import tkinter as tk
 from tkinter import ttk
 
 import keyring.errors as keyring_errors
+import pyotp
 from keyring import delete_password, set_password
+from PIL import ImageGrab
+from pyzbar.pyzbar import decode
 
 from soyyo.auxiliares import validate_pin
 from soyyo.estados import EstadoSistema
@@ -34,6 +37,8 @@ class VentanaCaptura(ttk.Frame):
         super().__init__(master)
         self.grid(column=0, row=0, sticky=tk.NSEW)
         self._crearWidgets()
+        self.s = ttk.Style()
+        self.s.configure('TButton', font=('TkDefaultFont', 12, 'bold'))
         top = self.winfo_toplevel()
         top.rowconfigure(0, weight=1)
         top.columnconfigure(0, weight=1)
@@ -48,7 +53,34 @@ class VentanaCaptura(ttk.Frame):
         self.quit()
 
     def _capturar(self):
-        pass
+        x = self.canvas.winfo_rootx()
+        y = self.canvas.winfo_rooty()
+        w = self.canvas.winfo_width()
+        h = self.canvas.winfo_height()
+
+        top = self.winfo_toplevel()
+        top.withdraw()
+        top.update()
+        time.sleep(1)
+
+        imagen = ImageGrab.grab(bbox=(x, y, x + w, y + h))
+
+        top.deiconify()
+
+        decodificada = decode(imagen)
+
+        print(dir(decodificada[0]))
+        print(decodificada[0].data)
+        print(decodificada[0].type)
+
+        totp = pyotp.parse_uri(decodificada[0].data)
+
+        print(totp.issuer)  # nombre del servicio
+        print(totp.name)  # usuario
+        print(totp.secret)  # la clave
+        print(totp.now())  # genera el token actual
+        print(totp.interval)
+        print(totp.digits)
 
     def _crearWidgets(self):
         self.rowconfigure(0, weight=1)
@@ -111,9 +143,9 @@ def setup(data_path):
     pepper_64 = base64.b64encode(pepper).decode('utf-8')
 
     autorizacion = {'hash': hash_64, 'salt': salt_64}
-    semillas = {}
+    totp = {}
 
-    datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'semillas': semillas}
+    datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'totp': totp}
     cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
     firma = hmac.new(pepper, cadena_json, 'sha512').hexdigest()
 
@@ -125,7 +157,7 @@ def setup(data_path):
         return EstadoSistema.SALIENDO_ERROR
 
     try:
-        datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'semillas': semillas,
+        datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'totp': totp,
                  'firma': firma}
         with open(data_path, 'w', encoding='utf8') as fout:
             json.dump(datos, fout, sort_keys=True, separators=(',', ':'))
