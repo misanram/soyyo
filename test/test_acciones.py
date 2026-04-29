@@ -36,29 +36,20 @@ def almacen_valido(tmp_path):
 def test_reset_keyboard_interrupt(tmp_path, capsys):
     fichero = tmp_path / 'datos.json'
     with patch('soyyo.acciones.input', side_effect=KeyboardInterrupt):
-        with pytest.raises(SystemExit):
-            reset(fichero)
-        captured = capsys.readouterr()
-    assert 'Abortando reset...' in captured.out
+        assert reset(fichero) == EstadoSistema.SALIENDO_OK
 
 
 @pytest.mark.parametrize('respuesta', ['N', 'C'])
-def test_reset_NC(tmp_path, capsys, respuesta):
+def test_reset_NC(tmp_path, respuesta):
     fichero = tmp_path / 'datos.json'
     with patch('soyyo.acciones.input', return_value=respuesta):
-        with pytest.raises(SystemExit):
-            reset(fichero)
-        captured = capsys.readouterr()
-    assert 'Abortando reset...' in captured.out
+        assert reset(fichero) == EstadoSistema.SALIENDO_OK
 
 
 def test_reset_otro_caracter(tmp_path, capsys):
     fichero = tmp_path / 'datos.json'
     with patch('soyyo.acciones.input', side_effect=['^', 'C']):
-        with pytest.raises(SystemExit):
-            reset(fichero)
-        captured = capsys.readouterr()
-    assert 'Abortando reset...' in captured.out
+        assert reset(fichero) == EstadoSistema.SALIENDO_OK
 
 
 def test_reset_S(tmp_path):
@@ -98,10 +89,7 @@ def test_setup_sin_error_pin_no_ascii(tmp_path):
 def test_setup_keyboard_interrupt(tmp_path, capsys):
     fichero = tmp_path / 'datos.json'
     with patch('soyyo.acciones.validate_pin', side_effect=KeyboardInterrupt):
-        with pytest.raises(SystemExit):
-            setup(fichero)
-        captured = capsys.readouterr()
-    assert 'Cancelado por el usuario.' in captured.out
+        assert setup(fichero) == EstadoSistema.SALIENDO_OK
 
 
 def test_setup_pines_distintos(tmp_path, capsys):
@@ -115,11 +103,9 @@ def test_setup_pines_distintos(tmp_path, capsys):
 def test_setup_set_keyring_error(tmp_path):
     fichero = tmp_path / 'datos.json'
     fichero.touch()
-    with (patch('soyyo.acciones.validate_pin', return_value='12345678'), patch(
-            'soyyo.acciones.set_password',
-            side_effect=keyring_errors.PasswordSetError)):
-        with pytest.raises(SystemExit):
-            setup(fichero)
+    with (patch('soyyo.acciones.validate_pin', return_value='12345678'),
+          patch('soyyo.acciones.set_password', side_effect=keyring_errors.PasswordSetError)):
+        assert setup(fichero) == EstadoSistema.SALIENDO_ERROR
 
 
 def test_setup_file_write_error(tmp_path, capsys):
@@ -127,11 +113,7 @@ def test_setup_file_write_error(tmp_path, capsys):
     fichero.touch()
     fichero.chmod(0o444)
     with patch('soyyo.acciones.validate_pin', return_value='12345678'):
-        with pytest.raises(SystemExit):
-            setup(fichero)
-        captured = capsys.readouterr()
-    assert 'La aplicación no puede continuar' in captured.out
-    assert '[Errno 13] Permission denied' in captured.out
+        assert setup(fichero) == EstadoSistema.SALIENDO_ERROR
 
 
 def test_setup_delete_password_keyring_error(tmp_path):

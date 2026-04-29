@@ -38,8 +38,7 @@ def setup(data_path):
         try:
             pines = [validate_pin(arg) for arg in preguntas]
         except KeyboardInterrupt:
-            print('\n\nCancelado por el usuario.')
-            sys.exit(1)
+            return EstadoSistema.SALIENDO_OK
 
         if len(set(pines)) != 1:
             print('\nAmbos valores deben ser iguales.\n\n')
@@ -70,7 +69,7 @@ def setup(data_path):
         log.error(error)
         print(error)
         print('La aplicación no puede continuar.')
-        sys.exit(1)
+        return EstadoSistema.SALIENDO_ERROR
 
     try:
         datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'semillas': semillas,
@@ -82,8 +81,7 @@ def setup(data_path):
         log.error(error)
         delete_password('soyyo', 'pepper')
         print(error)
-        print('La aplicación no puede continuar.')
-        sys.exit(1)
+        return EstadoSistema.SALIENDO_ERROR
 
 
 def reset(data_path):
@@ -114,5 +112,4 @@ def reset(data_path):
                 pass
             return EstadoSistema.PRIMER_ARRANQUE
         else:
-            print('\n\n        Abortando reset...')
-            sys.exit(0)
+            return EstadoSistema.SALIENDO_OK

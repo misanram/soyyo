@@ -23,6 +23,12 @@ MSG_FIRMA_INVALIDA = """
         Las semillas almacenadas no son legibles
         Debe resetar la aplicación."""
 
+MSG_SALIENDO_OK = """
+    Aplicación finalizada."""
+
+MSG_SALIENDO_ERROR = """
+    La aplicación no puede continuar debido a un error."""
+
 MSG_SETUP = """
     Debe crear un PIN para usar la aplicación.
     Manténgalo en secreto y no lo comparta.

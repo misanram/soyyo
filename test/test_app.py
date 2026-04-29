@@ -72,18 +72,14 @@ def test__comprueba_estado_todo_ok():
         assert app._comprueba_estado() == EstadoSistema.OK
 
 
-def test__comprueba_estado_exception_en_chek(capsys):
+def test__comprueba_estado_exception_en_chek():
     with (patch('soyyo.app.get_options'), patch('soyyo.app.chek_keyring', return_value=True),
           patch('soyyo.app.chek_almacen', return_value=True),
           patch('soyyo.app.chek_pepper', return_value=True),
           patch('soyyo.app.chek_integridad_json', return_value=True),
           patch('soyyo.app.chek_firma', side_effect=Exception)):
-        with pytest.raises(SystemExit):
-            main()
-            app = Aplicacion(None)
-            app._comprueba_estado()
-    captured = capsys.readouterr()
-    assert 'La aplicación no puede continuar.' in captured.out
+        app = Aplicacion(None)
+        assert app._comprueba_estado() == EstadoSistema.SALIENDO_ERROR
 
 
 def test_run_reset(capsys):
@@ -131,6 +127,22 @@ def test_run_firma_invalida(capsys):
             main()
     captured = capsys.readouterr()
     assert 'El almacén de datos parece haber sido manipulado.' in captured.out
+
+
+def test_run_saliendo_ok():
+    with (patch('sys.argv', ['soyyo']),
+          patch.object(Aplicacion, '_comprueba_estado', return_value=EstadoSistema.SALIENDO_OK)):
+        with pytest.raises(SystemExit) as exc:
+            main()
+        assert exc.value.code == 0
+
+
+def test_run_saliendo_error():
+    with (patch('sys.argv', ['soyyo']),
+          patch.object(Aplicacion, '_comprueba_estado', return_value=EstadoSistema.SALIENDO_ERROR)):
+        with pytest.raises(SystemExit) as exc:
+            main()
+        assert exc.value.code == 1
 
 
 def test_main(capsys):

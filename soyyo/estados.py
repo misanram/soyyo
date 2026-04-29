@@ -15,6 +15,8 @@ class EstadoSistema(Enum):
     FICHERO_CORRUPTO = 'fichero_corrupto'  # JSON inválido o ilegible
     FIRMA_INVALIDA = 'firma_invalida'  # El fichero ha sido manipulado
     OK = 'ok'  # Todo correcto
+    SALIENDO_OK = 'saliendo_ok'  # El programa termina normalmente
+    SALIENDO_ERROR = 'saliendo_error'  # El porgrama termina en error
 
 
 class ErrorApp(Exception):

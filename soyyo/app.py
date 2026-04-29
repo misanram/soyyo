@@ -12,7 +12,9 @@ from soyyo.acciones import reset, setup
 from soyyo.auxiliares import (chek_almacen, chek_firma, chek_integridad_json, chek_keyring,
                               chek_pepper)
 from soyyo.estados import EstadoSistema
-from soyyo.mensajes import MSG_FICHERO_CORRUPTO, MSG_FIRMA_INVALIDA, MSG_SIN_KEYRING, MSG_SIN_PEPPER
+from soyyo.mensajes import (MSG_FICHERO_CORRUPTO, MSG_FIRMA_INVALIDA, MSG_SALIENDO_ERROR, MSG_SALIENDO_OK,
+                            MSG_SIN_KEYRING,
+                            MSG_SIN_PEPPER)
 
 log = logging.getLogger(__name__)
 file_handler = RotatingFileHandler('soyyo.log', maxBytes=1_000_000, backupCount=5)
@@ -67,8 +69,7 @@ class Aplicacion:
         except Exception as error:
             log.exception(error)
             print(error)
-            print('La aplicación no puede continuar.')
-            sys.exit(1)
+            return EstadoSistema.SALIENDO_ERROR
 
     def run(self):
         """
@@ -78,7 +79,7 @@ class Aplicacion:
         estado = self._comprueba_estado()
         log.debug(estado)
 
-        if self.args.reset and estado not in (EstadoSistema.SIN_KEYRING, EstadoSistema.PRIMER_ARRANQUE):
+        if self.args.reset and estado not in (EstadoSistema.SIN_KEYRING,):
             estado = reset(self.data_path)
             log.debug(estado)
 
@@ -98,6 +99,14 @@ class Aplicacion:
             elif estado == EstadoSistema.FIRMA_INVALIDA:
                 print(MSG_FIRMA_INVALIDA)
                 sys.exit(1)
+
+            elif estado == EstadoSistema.SALIENDO_ERROR:
+                print(MSG_SALIENDO_ERROR)
+                sys.exit(1)
+
+            elif estado == EstadoSistema.SALIENDO_OK:
+                print(MSG_SALIENDO_OK)
+                sys.exit(0)
 
             elif estado == EstadoSistema.PRIMER_ARRANQUE:
                 estado = setup(self.data_path)
