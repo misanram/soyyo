@@ -33,12 +33,14 @@ class VentanaCaptura(ttk.Frame):
 
     """
 
-    def __init__(self, master=None):
+    def __init__(self, master):
         super().__init__(master)
         self.grid(column=0, row=0, sticky=tk.NSEW)
         self._crearWidgets()
         self.s = ttk.Style()
         self.s.configure('TButton', font=('TkDefaultFont', 12, 'bold'))
+        self.uri = b''
+        self.etiqueta = ''
         top = self.winfo_toplevel()
         top.rowconfigure(0, weight=1)
         top.columnconfigure(0, weight=1)
@@ -64,23 +66,16 @@ class VentanaCaptura(ttk.Frame):
         time.sleep(1)
 
         imagen = ImageGrab.grab(bbox=(x, y, x + w, y + h))
-
-        top.deiconify()
-
+        log.debug('QR capturado')
         decodificada = decode(imagen)
+        if decodificada:
+            log.debug('QR decodificado')
+            totp = pyotp.parse_uri(decodificada[0].data)
 
-        print(dir(decodificada[0]))
-        print(decodificada[0].data)
-        print(decodificada[0].type)
+            self.etiqueta = f'{totp.issuer}:{totp.name}'
+            self.uri = decodificada[0].data
 
-        totp = pyotp.parse_uri(decodificada[0].data)
-
-        print(totp.issuer)  # nombre del servicio
-        print(totp.name)  # usuario
-        print(totp.secret)  # la clave
-        print(totp.now())  # genera el token actual
-        print(totp.interval)
-        print(totp.digits)
+        self._cerrar()
 
     def _crearWidgets(self):
         self.rowconfigure(0, weight=1)
@@ -119,7 +114,6 @@ def setup(data_path):
 
         print(MSG_SETUP)
         preguntas = ['PIN', 'Repita el PIN']
-        pines = []
 
         try:
             pines = [validate_pin(arg) for arg in preguntas]
@@ -205,7 +199,11 @@ def captura(data_path):
     Captura el QR de un secreto TOTP
     """
 
-    ventana = VentanaCaptura()
+    root = tk.Tk()
+    ventana = VentanaCaptura(root)
     ventana.mainloop()
+    print(ventana.uri)
+    print(ventana.etiqueta)
+    root.destroy()
 
     return EstadoSistema.SALIENDO_OK
