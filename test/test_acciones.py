@@ -6,12 +6,13 @@ import base64
 import hmac
 import json
 import os
+import tkinter as tk
 from unittest.mock import patch
 
 import keyring.errors as keyring_errors
 import pytest
 
-from soyyo.acciones import reset, setup
+from soyyo.acciones import reset, setup, VentanaCaptura
 from soyyo.estados import EstadoSistema
 
 
@@ -130,3 +131,12 @@ def test_setup_delete_password_keyring_error(tmp_path):
           patch('soyyo.acciones.delete_password', side_effect=keyring_errors.PasswordDeleteError)):
         with pytest.raises(keyring_errors.PasswordDeleteError):
             setup(fichero)
+
+
+def test_capture_inicial():
+    root = tk.Tk()
+    root.withdraw()
+    app = VentanaCaptura(root)
+    assert app.uri == b''
+    assert app.etiqueta == ''
+    root.destroy()

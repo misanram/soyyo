@@ -1,0 +1,19 @@
+from pathlib import Path
+
+
+def chek_keyring() -> bool: ...
+
+
+def chek_almacen(data_path: Path) -> bool: ...
+
+
+def chek_pepper() -> bool: ...
+
+
+def chek_integridad_json(data_path: Path) -> bool: ...
+
+
+def chek_firma(data_path: Path) -> bool: ...
+
+
+def validate_pin(prompt_head: str) -> str: ...

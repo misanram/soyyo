@@ -45,9 +45,16 @@ class VentanaCaptura(ttk.Frame):
         top.rowconfigure(0, weight=1)
         top.columnconfigure(0, weight=1)
         top.resizable(height=tk.TRUE, width=tk.TRUE)
-        top.minsize(200, 210)
+        top.minsize(400, 400)
         top.title('soyyo captura de QR')
         top.protocol("WM_DELETE_WINDOW", self._cerrar)
+
+    def trasparencia(self):
+        """
+        Define la trasparencia de la ventana principal.
+        """
+
+        top = self.winfo_toplevel()
         top.wait_visibility()
         top.attributes('-alpha', 0.5)
 
@@ -82,25 +89,25 @@ class VentanaCaptura(ttk.Frame):
         self.rowconfigure(1, weight=0)
         self.columnconfigure(0, weight=1)
 
-        self.frame_visor = ttk.Frame(self)
-        self.frame_visor.grid(row=0, column=0, sticky=tk.NSEW)
-        self.frame_visor.rowconfigure(0, weight=1)
-        self.frame_visor.columnconfigure(0, weight=1)
+        frame_visor = ttk.Frame(self)
+        frame_visor.grid(row=0, column=0, sticky=tk.NSEW)
+        frame_visor.rowconfigure(0, weight=1)
+        frame_visor.columnconfigure(0, weight=1)
 
-        self.canvas = tk.Canvas(self.frame_visor, bg='gray')
+        self.canvas = tk.Frame(frame_visor, bg='gray')
         self.canvas.grid(row=0, column=0, sticky=tk.NSEW)
 
-        self.frame_botones = ttk.Frame(self)
-        self.frame_botones.columnconfigure(0, weight=1)
-        self.frame_botones.grid(row=1, column=0, sticky=tk.EW)
+        frame_botones = ttk.Frame(self)
+        frame_botones.columnconfigure(0, weight=1)
+        frame_botones.grid(row=1, column=0, sticky=tk.EW)
 
-        self.boton_cancelar = ttk.Button(self.frame_botones, text='Cancelar', command=self._cerrar)
-        self.boton_cancelar.grid(row=0, column=1, pady=5, padx=5, sticky=tk.EW)
-        self.frame_botones.columnconfigure(1, weight=1)
+        boton_cancelar = ttk.Button(frame_botones, text='Cancelar', command=self._cerrar)
+        boton_cancelar.grid(row=0, column=1, pady=5, padx=5, sticky=tk.EW)
+        frame_botones.columnconfigure(1, weight=1)
 
-        self.boton_captura = ttk.Button(self.frame_botones, text='Capturar', command=self._capturar)
-        self.boton_captura.grid(row=0, column=0, pady=5, padx=5, sticky=tk.EW)
-        self.frame_botones.columnconfigure(0, weight=1)
+        boton_captura = ttk.Button(frame_botones, text='Capturar', command=self._capturar)
+        boton_captura.grid(row=0, column=0, pady=5, padx=5, sticky=tk.EW)
+        frame_botones.columnconfigure(0, weight=1)
 
 
 def setup(data_path):
@@ -201,6 +208,7 @@ def captura(data_path):
 
     root = tk.Tk()
     ventana = VentanaCaptura(root)
+    ventana.trasparencia()
     ventana.mainloop()
     print(ventana.uri)
     print(ventana.etiqueta)
