@@ -2,14 +2,14 @@ from enum import Enum
 
 
 class EstadoSistema(Enum):
-    SIN_KEYRING: str
-    PRIMER_ARRANQUE: str
-    SIN_PEPPER: str
-    FICHERO_CORRUPTO: str
-    FIRMA_INVALIDA: str
-    OK: str
-    SALIENDO_OK: str
-    SALIENDO_ERROR: str
+    SIN_KEYRING = 'sin_keyring'
+    PRIMER_ARRANQUE = 'primer_arranque'
+    SIN_PEPPER = 'sin_pepper'
+    FICHERO_CORRUPTO = 'fichero_corrupto'
+    FIRMA_INVALIDA = 'firma_invalida'
+    OK = 'ok'
+    SALIENDO_OK = 'saliendo_ok'
+    SALIENDO_ERROR = 'saliendo_error'
 
 
 class ErrorApp(Exception): ...

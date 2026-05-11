@@ -2,7 +2,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import ttk
 
-from estados import EstadoSistema
+from soyyo.estados import EstadoSistema
 
 
 class VentanaCaptura(ttk.Frame):
