@@ -419,24 +419,24 @@ def test_paint_event_pixel(qtbot):
     assert color_area.blue() == 60
 
 
-def test_captura(tmp_path):
+def test_captura():
     with patch('soyyo.acciones.QApplication'):
         with patch('soyyo.acciones.VentanaCaptura') as mock_ventana:
             mock_ventana.return_value.imagen = None
-            resultado = captura(tmp_path)
+            resultado = captura()
     assert resultado == EstadoSistema.SALIENDO_ERROR
 
 
-def test_captura_sin_qr(tmp_path):
+def test_captura_sin_qr():
     with patch('soyyo.acciones.QApplication'):
         with patch('soyyo.acciones.VentanaCaptura') as mock_ventana:
             mock_ventana.return_value.imagen = 'imagen_falsa'
             with patch('soyyo.acciones.decode', return_value=[]):
-                resultado = captura(tmp_path)
+                resultado = captura()
     assert resultado == EstadoSistema.SALIENDO_ERROR
 
 
-def test_captura_ok(tmp_path, qtbot):
+def test_captura_ok():
     mock_totp = MagicMock()
     mock_totp.issuer = 'Google'
     mock_totp.name = 'usuario@gmail.com'
@@ -447,5 +447,5 @@ def test_captura_ok(tmp_path, qtbot):
             mock_ventana.return_value.imagen = 'imagen_falsa'
             with patch('soyyo.acciones.decode', return_value=[mock_decoded]):
                 with patch('soyyo.acciones.pyotp.parse_uri', return_value=mock_totp):
-                    resultado = captura(tmp_path)
+                    resultado = captura()
     assert resultado == EstadoSistema.SALIENDO_OK
