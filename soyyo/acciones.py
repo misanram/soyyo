@@ -25,7 +25,7 @@ from soyyo.auxiliares import validate_pin
 from soyyo.constantes import CURSORES, EstadoSistema, Zona
 from soyyo.mensajes import MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_PROMPT_RESET, MSG_SETUP
 
-os.environ["QT_QPA_PLATFORM"] = "xcb"
+os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
 log = logging.getLogger(__name__)
 
 BORDE = 8
