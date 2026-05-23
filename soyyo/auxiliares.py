@@ -59,7 +59,7 @@ def chek_integridad_json(data_path):
 
 def chek_firma(data_path):
     """
-    Comprueba que la firma del json es válida (que el .json no ha sido manipulado)
+    Comprueba que la firma del json es válida (que el archivo .json no ha sido manipulado)
     """
 
     with open(data_path, 'r', encoding='utf8') as fin:

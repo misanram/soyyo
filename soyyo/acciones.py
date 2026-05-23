@@ -11,103 +11,212 @@ import logging
 import os
 import sys
 import time
-import tkinter as tk
-from tkinter import ttk
 
 import keyring.errors as keyring_errors
 import pyotp
 from keyring import delete_password, set_password
 from PIL import ImageGrab
+from PySide6.QtCore import QRect, QSize, Qt
+from PySide6.QtGui import QColor, QPainter
+from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 from pyzbar.pyzbar import decode
 
 from soyyo.auxiliares import validate_pin
-from soyyo.estados import EstadoSistema
-from soyyo.mensajes import MSG_PROMPT_RESET, MSG_SETUP
+from soyyo.estados import CURSORES, EstadoSistema, Zona
+from soyyo.mensajes import MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_PROMPT_RESET, MSG_SETUP
 
+os.environ["QT_QPA_PLATFORM"] = "xcb"
 log = logging.getLogger(__name__)
 
+BORDE = 8
 
-class VentanaCaptura(ttk.Frame):
+
+class VentanaCaptura(QWidget):
     """
-    Clase para capturar pantalla con código QR
-
+    Clase para generar una pantalla de captura de imagenes y capturar una imagen
     """
 
-    def __init__(self, master):
-        super().__init__(master)
-        self.grid(column=0, row=0, sticky=tk.NSEW)
-        self._crearWidgets()
-        self.s = ttk.Style()
-        self.s.configure('TButton', font=('TkDefaultFont', 12, 'bold'))
-        self.uri = b''
-        self.etiqueta = ''
-        top = self.winfo_toplevel()
-        top.rowconfigure(0, weight=1)
-        top.columnconfigure(0, weight=1)
-        top.resizable(height=tk.TRUE, width=tk.TRUE)
-        top.minsize(400, 400)
-        top.title('soyyo captura de QR')
-        top.protocol("WM_DELETE_WINDOW", self._cerrar)
+    def __init__(self, ancho, alto):
+        super().__init__()
+        self._pantalla = QApplication.primaryScreen().availableGeometry()
+        self._clic_pos = None
+        self._zona_activa = None
+        self._ancho_original = ancho
+        self._alto_original = alto
+        self.imagen = None
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setMouseTracking(True)
+        self.resize(QSize(self._ancho_original, self._alto_original))
+        self.setMinimumSize(200, 200)
 
-    def trasparencia(self):
-        """
-        Define la trasparencia de la ventana principal.
-        """
+        # Botones en la parte superior (opacos, sobre fondo sólido)
+        self._btn_capturar = QPushButton("Capturar", self)
+        self._btn_cancelar = QPushButton("Cancelar", self)
+        self._btn_capturar.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_cancelar.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_capturar.move(10, 10)
+        self._btn_cancelar.move(100, 10)
+        self._btn_capturar.clicked.connect(self._capturar)
+        self._btn_cancelar.clicked.connect(self.close)
 
-        top = self.winfo_toplevel()
-        top.wait_visibility()
-        top.attributes('-alpha', 0.5)
+    def _zona_actual(self, pos):
+        if pos is None:
+            raise ValueError('pos no puede ser None')
+        x = pos.x()
+        y = pos.y()
+        zona = Zona.INTERIOR
 
-    def _cerrar(self):
-        self.quit()
+        if (y < BORDE) and (x < BORDE):
+            zona = Zona.ESQUINA_SUPERIOR_IZQUIERDA
+        elif (y < BORDE) and (x > self.width() - BORDE):
+            zona = Zona.ESQUINA_SUPERIOR_DERECHA
+        elif (y > self.height() - BORDE) and (x < BORDE):
+            zona = Zona.ESQUINA_INFERIOR_IZQUIERDA
+        elif (y > self.height() - BORDE) and (x > self.width() - BORDE):
+            zona = Zona.ESQUINA_INFERIOR_DERECHA
+        elif (y < BORDE) and (BORDE < x < self.width() - BORDE):
+            zona = Zona.BORDE_SUPERIOR
+        elif (y > self.height() - BORDE) and (BORDE < x < self.width() - BORDE):
+            zona = Zona.BORDE_INFERIOR
+        elif (x < BORDE) and (BORDE < y < self.height() - BORDE):
+            zona = Zona.BORDE_IZQUIERDO
+        elif (x > self.width() - BORDE) and (BORDE < y < self.height() - BORDE):
+            zona = Zona.BORDE_DERECHO
+        elif (BORDE < y < 40) and (BORDE < x < self.width() - BORDE):
+            zona = Zona.BARRA
+
+        return zona
 
     def _capturar(self):
-        x = self.canvas.winfo_rootx()
-        y = self.canvas.winfo_rooty()
-        w = self.canvas.winfo_width()
-        h = self.canvas.winfo_height()
+        geo = self.geometry()
+        area = (
+                geo.x(),
+                geo.y() + 40,  # descarta la barra de botones
+                geo.x() + geo.width(),
+                geo.y() + geo.height()
+                )
+        self.hide()
+        log.debug(f'Área a capturar: {area}')
+        self.imagen = ImageGrab.grab(bbox=area, all_screens=True)
+        self.show()
+        self.close()
 
-        top = self.winfo_toplevel()
-        top.withdraw()
-        top.update()
-        time.sleep(1)
+    def mousePressEvent(self, event):
+        """
+        Gestión del evento cuando se presiona el botón izquierdo del ratón.
+        """
 
-        imagen = ImageGrab.grab(bbox=(x, y, x + w, y + h))
-        log.debug('QR capturado')
-        decodificada = decode(imagen)
-        if decodificada:
-            log.debug('QR decodificado')
-            totp = pyotp.parse_uri(decodificada[0].data)
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._clic_pos = event.position().toPoint()  # posición relativa al widget
+            self._zona_activa = self._zona_actual(self._clic_pos)
+            self._ancho_original = self.size().width()
+            self._alto_original = self.size().height()
 
-            self.etiqueta = f'{totp.issuer}:{totp.name}'
-            self.uri = decodificada[0].data
+    def mouseMoveEvent(self, event):
+        """
+        Gestión del evento cuando se mueve el ratón.
+        """
 
-        self._cerrar()
+        if self._clic_pos is not None:
+            delta = event.position().toPoint() - self._clic_pos
+            limite_inferior = self._pantalla.height() - (self.y() + self._alto_original)
+            limite_derecho = self._pantalla.width() - (self.x() + self._ancho_original)
+            nueva_x = self.pos().x()
+            nueva_y = self.pos().y()
+            nuevo_ancho = self.size().width()
+            nuevo_alto = self.size().height()
+            if self._zona_activa == Zona.ESQUINA_SUPERIOR_IZQUIERDA:
+                nueva_x = max(self.pos().x() + delta.x(), 0)
+                if nueva_x > 0:
+                    nuevo_ancho -= delta.x()
+                else:
+                    nuevo_ancho += self.pos().x()
+                nueva_y = max(self.pos().y() + delta.y(), 0)
+                if nueva_y > 0:
+                    nuevo_alto -= delta.y()
+                else:
+                    nuevo_alto += self.pos().y()
+                if nuevo_ancho <= 200:
+                    nueva_x = self.pos().x()
+                    nuevo_ancho = 200
+                if nuevo_alto <= 200:
+                    nueva_y = self.pos().y()
+                    nuevo_alto = 200
+            elif self._zona_activa == Zona.ESQUINA_SUPERIOR_DERECHA:
+                nueva_y = max(self.pos().y() + delta.y(), 0)
+                nuevo_ancho = self._ancho_original + min(delta.x(), limite_derecho)
+                if nueva_y > 0:
+                    nuevo_alto -= delta.y()
+                else:
+                    nuevo_alto += self.pos().y()
+                if nuevo_alto <= 200:
+                    nueva_y = self.pos().y()
+                    nuevo_alto = 200
+            elif self._zona_activa == Zona.ESQUINA_INFERIOR_IZQUIERDA:
+                nueva_x = max(self.pos().x() + delta.x(), 0)
+                if nueva_x > 0:
+                    nuevo_ancho -= delta.x()
+                else:
+                    nuevo_ancho += self.pos().x()
+                nuevo_alto = self._alto_original + min(delta.y(), limite_inferior)
+                if nuevo_ancho <= 200:
+                    nueva_x = self.pos().x()
+                    nuevo_ancho = 200
+            elif self._zona_activa == Zona.ESQUINA_INFERIOR_DERECHA:
+                nuevo_alto = self._alto_original + min(delta.y(), limite_inferior)
+                nuevo_ancho = self._ancho_original + min(delta.x(), limite_derecho)
+            elif self._zona_activa == Zona.BORDE_SUPERIOR:
+                nueva_y = max(self.pos().y() + delta.y(), 0)
+                if nueva_y > 0:
+                    nuevo_alto -= delta.y()
+                else:
+                    nuevo_alto += self.pos().y()
+                if nuevo_alto <= 200:
+                    nueva_y = self.pos().y()
+                    nuevo_alto = 200
+            elif self._zona_activa == Zona.BORDE_INFERIOR:
+                nuevo_alto = self._alto_original + min(delta.y(), limite_inferior)
+            elif self._zona_activa == Zona.BORDE_IZQUIERDO:
+                nueva_x = max(self.pos().x() + delta.x(), 0)
+                if nueva_x > 0:
+                    nuevo_ancho -= delta.x()
+                else:
+                    nuevo_ancho += self.pos().x()
+                if nuevo_ancho <= 200:
+                    nueva_x = self.pos().x()
+                    nuevo_ancho = 200
+            elif self._zona_activa == Zona.BORDE_DERECHO:
+                nuevo_ancho = self._ancho_original + min(delta.x(), limite_derecho)
+            elif self._zona_activa == Zona.BARRA:
+                nueva_x = self.pos().x() + delta.x()
+                nueva_y = self.pos().y() + delta.y()
+            self.setGeometry(nueva_x, nueva_y, nuevo_ancho, nuevo_alto)
+        else:
+            zona = self._zona_actual(event.position().toPoint())
+            self.setCursor(CURSORES[zona])
 
-    def _crearWidgets(self):
-        self.rowconfigure(0, weight=1)
-        self.rowconfigure(1, weight=0)
-        self.columnconfigure(0, weight=1)
+    def mouseReleaseEvent(self, event):
+        """
+        Gestión del evento cuando se libera el ratón.
+        """
 
-        frame_visor = ttk.Frame(self)
-        frame_visor.grid(row=0, column=0, sticky=tk.NSEW)
-        frame_visor.rowconfigure(0, weight=1)
-        frame_visor.columnconfigure(0, weight=1)
+        self._clic_pos = None
+        self._zona_activa = None
 
-        self.canvas = tk.Frame(frame_visor, bg='gray')
-        self.canvas.grid(row=0, column=0, sticky=tk.NSEW)
+    def paintEvent(self, event):
+        """
+        Gestión del evento cuando hay que dibujar la ventana.
+        """
 
-        frame_botones = ttk.Frame(self)
-        frame_botones.columnconfigure(0, weight=1)
-        frame_botones.grid(row=1, column=0, sticky=tk.EW)
-
-        boton_cancelar = ttk.Button(frame_botones, text='Cancelar', command=self._cerrar)
-        boton_cancelar.grid(row=0, column=1, pady=5, padx=5, sticky=tk.EW)
-        frame_botones.columnconfigure(1, weight=1)
-
-        boton_captura = ttk.Button(frame_botones, text='Capturar', command=self._capturar)
-        boton_captura.grid(row=0, column=0, pady=5, padx=5, sticky=tk.EW)
-        frame_botones.columnconfigure(0, weight=1)
+        painter = QPainter(self)
+        # Barra superior opaca (donde van los botones)
+        painter.fillRect(QRect(0, 0, self.width(), 40), QColor(50, 50, 50, 255))
+        # Área de selección semitransparente
+        painter.fillRect(QRect(0, 40, self.width(), self.height() - 40), QColor(100, 100, 255, 60))
+        # Marco del área de selección
+        painter.setPen(QColor(0, 120, 255))
+        painter.drawRect(QRect(0, 40, self.width() - 1, self.height() - 41))
 
 
 def setup(data_path):
@@ -201,17 +310,29 @@ def reset(data_path):
             return EstadoSistema.SALIENDO_OK
 
 
-def captura(data_path):
+def captura():
     """
     Captura el QR de un secreto TOTP
     """
 
-    root = tk.Tk()
-    ventana = VentanaCaptura(root)
-    ventana.trasparencia()
-    ventana.mainloop()
-    print(ventana.uri)
-    print(ventana.etiqueta)
-    root.destroy()
+    app = QApplication(sys.argv)
+    print(dir(app))
+    ventana = VentanaCaptura(300, 300)
+    ventana.show()
+    app.exec()
+
+    if ventana.imagen:
+        decodificada = decode(ventana.imagen)
+        if decodificada:
+            log.debug('QR decodificado')
+            totp = pyotp.parse_uri(decodificada[0].data)
+            print(f'{totp.issuer}:{totp.name}')
+            print(decodificada[0].data)
+        else:
+            print(MSG_ERROR_DECODIFICA)
+            return EstadoSistema.SALIENDO_ERROR
+    else:
+        print(MSG_ERROR_CAPTURA)
+        return EstadoSistema.SALIENDO_ERROR
 
     return EstadoSistema.SALIENDO_OK

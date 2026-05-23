@@ -77,7 +77,7 @@ class Aplicacion:
         """
 
         estado = self._comprueba_estado()
-        log.debug(estado)
+        log.debug(f'Estado inicial: {estado}')
 
         if self.args.reset and estado not in (EstadoSistema.SIN_KEYRING,):
             estado = reset(self.data_path)
@@ -113,7 +113,7 @@ class Aplicacion:
 
             elif estado == EstadoSistema.OK:
                 if self.args.captura:
-                    estado = captura(self.data_path)
+                    estado = captura()
                 else:
                     print(not all(vars(self.args).values()))
                     break

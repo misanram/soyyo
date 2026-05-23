@@ -1,25 +1,36 @@
-import tkinter as tk
 from pathlib import Path
-from tkinter import ttk
+
+from PIL import Image
+from PySide6.QtCore import QPoint, QRect
+from PySide6.QtGui import QMouseEvent, QPaintEvent
+from PySide6.QtWidgets import QPushButton, QWidget
 
 from soyyo.estados import EstadoSistema
 
 
-class VentanaCaptura(ttk.Frame):
-    s: ttk.Style
-    canvas: ttk.Frame
-    etiqueta = bytes
-    uri = str
+class VentanaCaptura(QWidget):
+    _pantalla: QRect
+    _clic_pos: QPoint | None
+    _zona_activa: str | None
+    _ancho_original: int
+    _alto_original: int
+    imagen: Image.Image | None
+    _btn_capturar = QPushButton
+    _btn_cancelar = QPushButton
 
-    def __init__(self, master: tk.Tk) -> None: ...
+    def __init__(self, ancho: int, alto: int) -> None: ...
 
-    def trasparencia(self) -> None: ...
-
-    def _cerrar(self) -> None: ...
+    def _zona_actual(self, pos: QPoint | None) -> str: ...
 
     def _capturar(self) -> None: ...
 
-    def _crearWidgets(self) -> None: ...
+    def mousePressEvent(self, event: QMouseEvent) -> None: ...
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None: ...
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None: ...
+
+    def paintEvent(self, event: QPaintEvent) -> None: ...
 
 
 def reset(data_path: Path) -> EstadoSistema: ...
@@ -28,4 +39,4 @@ def reset(data_path: Path) -> EstadoSistema: ...
 def setup(data_path: Path) -> EstadoSistema: ...
 
 
-def captura(data_path: Path) -> EstadoSistema: ...
+def captura() -> EstadoSistema: ...

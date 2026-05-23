@@ -1,5 +1,5 @@
 """
-Mensajes que muestra el programa (esto puede que deaparezca o no...)
+Mensajes que muestra el programa (esto puede que desaparezca o no...)
 """
 
 MSG_SIN_KEYRING = """
@@ -28,7 +28,15 @@ MSG_SALIENDO_OK = """
     """
 
 MSG_SALIENDO_ERROR = """
-    La aplicación no puede continuar debido a un error.
+    La aplicación finaliza debido a un error.
+    """
+
+MSG_ERROR_CAPTURA = """
+    No se ha podido capturar una imagen.
+    """
+
+MSG_ERROR_DECODIFICA = """
+    No se ha podido decodificar la imagen capturada.
     """
 
 MSG_SETUP = """
