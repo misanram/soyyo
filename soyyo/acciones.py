@@ -22,7 +22,7 @@ from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 from pyzbar.pyzbar import decode
 
 from soyyo.auxiliares import validate_pin
-from soyyo.estados import CURSORES, EstadoSistema, Zona
+from soyyo.constantes import CURSORES, EstadoSistema, Zona
 from soyyo.mensajes import MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_PROMPT_RESET, MSG_SETUP
 
 os.environ["QT_QPA_PLATFORM"] = "xcb"

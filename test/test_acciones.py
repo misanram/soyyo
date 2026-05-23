@@ -15,7 +15,7 @@ from PySide6.QtGui import QMouseEvent, QPixmap
 from PySide6.QtWidgets import QApplication
 
 from soyyo.acciones import captura, reset, setup, VentanaCaptura
-from soyyo.estados import CURSORES, EstadoSistema, Zona
+from soyyo.constantes import CURSORES, EstadoSistema, Zona
 
 ESTIRAR = 'estirar'
 MAXIMO = 'maximo'

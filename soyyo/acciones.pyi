@@ -5,7 +5,7 @@ from PySide6.QtCore import QPoint, QRect
 from PySide6.QtGui import QMouseEvent, QPaintEvent
 from PySide6.QtWidgets import QPushButton, QWidget
 
-from soyyo.estados import EstadoSistema
+from soyyo.constantes import EstadoSistema
 
 
 class VentanaCaptura(QWidget):

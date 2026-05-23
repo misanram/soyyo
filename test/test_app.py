@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from soyyo.app import Aplicacion, get_options, main
-from soyyo.estados import EstadoSistema
+from soyyo.constantes import EstadoSistema
 
 
 def test_get_options_no_args():

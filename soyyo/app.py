@@ -11,7 +11,7 @@ from pathlib import Path
 from soyyo.acciones import captura, reset, setup
 from soyyo.auxiliares import (chek_almacen, chek_firma, chek_integridad_json, chek_keyring,
                               chek_pepper)
-from soyyo.estados import EstadoSistema
+from soyyo.constantes import EstadoSistema
 from soyyo.mensajes import (MSG_FICHERO_CORRUPTO, MSG_FIRMA_INVALIDA, MSG_SALIENDO_ERROR, MSG_SALIENDO_OK,
                             MSG_SIN_KEYRING,
                             MSG_SIN_PEPPER)
