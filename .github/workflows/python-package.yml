@@ -27,7 +27,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libzbar0
+        sudo apt-get install -y libzbar0 libegl1
     - name: Install display dependencies
       run: |
         sudo apt-get install -y xvfb

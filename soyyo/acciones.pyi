@@ -1,3 +1,4 @@
+from enum import Enum
 from pathlib import Path
 
 from PIL import Image
@@ -11,7 +12,7 @@ from soyyo.constantes import EstadoSistema
 class VentanaCaptura(QWidget):
     _pantalla: QRect
     _clic_pos: QPoint | None
-    _zona_activa: str | None
+    _zona_activa: Enum | None
     _ancho_original: int
     _alto_original: int
     imagen: Image.Image | None
@@ -20,7 +21,7 @@ class VentanaCaptura(QWidget):
 
     def __init__(self, ancho: int, alto: int) -> None: ...
 
-    def _zona_actual(self, pos: QPoint | None) -> str: ...
+    def _zona_actual(self, pos: QPoint | None) -> Enum: ...
 
     def _capturar(self) -> None: ...
 
