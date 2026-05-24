@@ -15,7 +15,7 @@ import tty
 import keyring.errors as keyring_errors
 from keyring import get_password, set_password
 
-from soyyo.constantes import PepperNotFoundError
+from soyyo.constantes import FirmaInvalidaError, PepperNotFoundError
 
 log = logging.getLogger(__name__)
 
@@ -67,16 +67,20 @@ def chek_firma(data_path):
     Comprueba que la firma del json es válida (que el archivo .json no ha sido manipulado)
     """
 
-    with open(data_path, 'r', encoding='utf8') as fin:
-        datos = json.load(fin)
-    firma = datos.get('firma')
-    del datos['firma']
-
-    cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
-    pepper = get_password('soyyo', 'pepper')
-    nueva_firma = hmac.new(base64.b64decode(pepper), cadena_json, 'sha512').hexdigest()  # type: ignore
-
-    return hmac.compare_digest(firma, nueva_firma)
+    try:
+        with open(data_path, 'r', encoding='utf8') as fin:
+            datos = json.load(fin)
+            firma = datos.pop('firma', None)
+            if firma is None:
+                log.warning(FirmaInvalidaError.__doc__)
+                raise FirmaInvalidaError
+        cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
+        pepper = get_password('soyyo', 'pepper')
+        nueva_firma = hmac.new(base64.b64decode(pepper), cadena_json, 'sha512').hexdigest()  # type: ignore
+        return hmac.compare_digest(firma, nueva_firma)
+    except OSError as error:
+        log.warning("Fallo al abrir '%s': %s", data_path, error)
+        raise
 
 
 def obtener_pin(prompt_head):
@@ -159,4 +163,49 @@ def validar_pin(data_path, pin):
         pepper64_b = base64.b64decode(pepper64)
         dk = hashlib.pbkdf2_hmac('sha256', bytes(pin) + pepper64_b, salt64, 500_000, dklen=64)
         return hmac.compare_digest(dk[:32], hash64)
+    log.warning(PepperNotFoundError.__doc__)
     raise PepperNotFoundError
+
+
+def guarda_json(data_path, datos):
+    """
+    Guarda los datos recibos como fichero JSON
+    """
+
+    try:
+        with open(data_path, 'w', encoding='utf8') as fout:
+            json.dump(datos, fout, sort_keys=True, separators=(',', ':'))
+        return True
+    except OSError as error:
+        log.warning("Fallo al abrir '%s': %s", data_path, error)
+        raise
+
+
+def _cargar_y_verificar_almacen(data_path):
+    """
+    Lee, verifica y parsea el fichero almacen. Nunca devuelve datos no verificados.
+    """
+
+    try:
+        with open(data_path, 'r', encoding='utf8') as fin:
+            datos = json.load(fin)
+            firma = datos.pop('firma', None)
+            if firma is None:
+                log.warning(FirmaInvalidaError.__doc__)
+                raise FirmaInvalidaError
+        cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
+        pepper64 = get_password('soyyo', 'pepper')
+        if pepper64:
+            pepper64_b = base64.b64decode(pepper64)
+            nueva_firma = hmac.new(pepper64_b, cadena_json, 'sha512').hexdigest()
+            if hmac.compare_digest(firma, nueva_firma):
+                return datos
+            else:
+                log.warning(FirmaInvalidaError.__doc__)
+                raise FirmaInvalidaError
+        else:
+            log.warning(PepperNotFoundError.__doc__)
+            raise PepperNotFoundError
+    except OSError as error:
+        log.warning("Fallo al abrir '%s': %s", data_path, error)
+        raise

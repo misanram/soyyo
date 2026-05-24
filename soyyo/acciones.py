@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 
 import keyring.errors as keyring_errors
 import pyotp
@@ -21,10 +22,12 @@ from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 from pyzbar.pyzbar import decode
 
-from soyyo.auxiliares import obtener_pin, validar_pin
-from soyyo.constantes import CURSORES, EstadoSistema, PepperNotFoundError, Zona
-from soyyo.mensajes import (MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_PROMPT_RESET, MSG_RESET_REALIZADO,
-                            MSG_SETUP)
+from soyyo.auxiliares import _cargar_y_verificar_almacen, guarda_json, obtener_pin, validar_pin
+from soyyo.constantes import (CURSORES, EstadoSistema, FirmaInvalidaError, PepperNotFoundError,
+                              TIEMPO_DE_BLOQUEO, Zona, )
+from soyyo.mensajes import (MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA, MSG_ERROR_CAPTURA,
+                            MSG_ERROR_DECODIFICA, MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS,
+                            MSG_FIRMA_INVALIDA, MSG_PROMPT_RESET, MSG_RESET_REALIZADO, MSG_SETUP, )
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
 log = logging.getLogger(__name__)
@@ -91,12 +94,8 @@ class VentanaCaptura(QWidget):
 
     def _capturar(self):
         geo = self.geometry()
-        area = (
-                geo.x(),
-                geo.y() + 40,  # descarta la barra de botones
-                geo.x() + geo.width(),
-                geo.y() + geo.height()
-                )
+        area = (geo.x(), geo.y() + 40,  # descarta la barra de botones
+                geo.x() + geo.width(), geo.y() + geo.height())
         self.hide()
         log.debug(f'Área a capturar: {area}')
         self.imagen = ImageGrab.grab(bbox=area, all_screens=True)
@@ -249,7 +248,7 @@ def setup(data_path):
     salt = os.urandom(32)
     pepper = os.urandom(32)
 
-    dk = hashlib.pbkdf2_hmac('sha256', bytes(pin) + pepper, salt, 500_000)
+    dk = hashlib.pbkdf2_hmac('sha256', bytes(pin) + pepper, salt, 500_000, dklen=64)
 
     for i in range(len(pin)):
         pin[i] = 0
@@ -262,7 +261,8 @@ def setup(data_path):
     autorizacion = {'hash': hash_64, 'salt': salt_64}
     totp = {}
 
-    datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'totp': totp}
+    datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'bloqueado_hasta': None,
+             'num_bloqueos': 0, 'totp': totp}
     cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
     firma = hmac.new(pepper, cadena_json, hashlib.sha512).hexdigest()
 
@@ -275,9 +275,8 @@ def setup(data_path):
 
     try:
         datos['firma'] = firma  # type: ignore
-        with open(data_path, 'w', encoding='utf8') as fout:
-            json.dump(datos, fout, sort_keys=True, separators=(',', ':'))
-        return EstadoSistema.INICIALIZACION_CORRECTA
+        if guarda_json(data_path, datos):
+            return EstadoSistema.INICIALIZACION_CORRECTA
     except OSError as error:
         log.error(error)
         delete_password('soyyo', 'pepper')
@@ -348,29 +347,61 @@ def captura():
 def autorizar(data_path):
     """
     Se solicita el PIN y se comprueba, si es correccto se devuelve EstadoSistema.AUTORIZADO,
-    en caso contrario se gestiona el bloqueo actualizando el fichero json con el número de intento y en
+    en caso contrario se gestiona el bloqueo actualizando el fichero json con el número de intentos y en
     caso necesario con el tiempo de bloqueo y el contador de bloqueos.
     """
 
-    while (intento := 1) <= 3:
-        if sys.stdout.isatty():
-            print('\033[2J\033[H', end='')  # pragma: no cover
-        try:
-            pin = obtener_pin('Introduzca el PIN')
-            print('\r')
-        except KeyboardInterrupt:
+    if sys.stdout.isatty():
+        print('\033[2J\033[H', end='')  # pragma: no cover
+
+    try:
+        datos = _cargar_y_verificar_almacen(data_path)
+        intento = datos['intentos']
+        num_bloqueos = datos['num_bloqueos']
+        if datos['bloqueado_hasta']:
+            bloqueado_hasta = datetime.fromisoformat(datos['bloqueado_hasta'])
+            if datetime.now(timezone.utc) < bloqueado_hasta:
+                print(MSG_ERROR_APP_BLOQUEADA_TEMPORAL % bloqueado_hasta.astimezone().isoformat())
+                return EstadoSistema.SALIENDO_OK
+        if num_bloqueos >= 10:
+            log.info('Aplicación bloqueada')
+            print(MSG_ERROR_APP_BLOQUEDA)
             return EstadoSistema.SALIENDO_OK
 
-        try:
-            if validar_pin(pin):
+        while intento <= 3:
+            try:
+                pin = obtener_pin('Introduzca el PIN')
+                print('\r')
+            except KeyboardInterrupt:
+                return EstadoSistema.SALIENDO_OK
+
+            if validar_pin(data_path, pin):
                 log.info('PIN correcto')
+                datos.update(dict(intento=0, num_bloqueos=0, bloqueado_hasta=None))
+                guarda_json(data_path, datos)
                 return EstadoSistema.AUTORIZADO
             else:
                 log.info('PIN erróneo, intento %s', intento)
                 intento += 1
-                continue
-        except PepperNotFoundError:
-            log.error('get_password no ha devuelto un pepper valido.')
-            return EstadoSistema.SIN_PEPPER
+                datos.update(dict(intento=intento))
+                guarda_json(data_path, datos)
 
-    return EstadoSistema.SALIENDO_OK
+        num_bloqueos += 1
+        bloqueado_hasta = (
+                datetime.now(timezone.utc) + timedelta(minutes=TIEMPO_DE_BLOQUEO[num_bloqueos])).isoformat()
+        datos.update(dict(intento=0, num_bloqueos=num_bloqueos, bloqueado_hasta=bloqueado_hasta))
+        guarda_json(data_path, datos)
+        return EstadoSistema.SALIENDO_OK
+
+    except FirmaInvalidaError:
+        log.exception(FirmaInvalidaError.__doc__)
+        print(MSG_FIRMA_INVALIDA)
+        return EstadoSistema.FIRMA_INVALIDA
+    except PepperNotFoundError:
+        log.exception(PepperNotFoundError.__doc__)
+        print(MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS)
+        return EstadoSistema.SIN_PEPPER
+    except OSError as error:
+        log.exception("Fallo al abrir '%s': %s", data_path, error)
+        print(MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS)
+        return EstadoSistema.SALIENDO_ERROR

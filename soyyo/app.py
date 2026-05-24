@@ -9,20 +9,15 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from soyyo.acciones import autorizar, captura, reset, setup
-from soyyo.auxiliares import (chek_almacen, chek_firma, chek_integridad_json, chek_keyring,
-                              chek_pepper)
-from soyyo.constantes import EstadoSistema
+from soyyo.auxiliares import (chek_almacen, chek_firma, chek_integridad_json, chek_keyring, chek_pepper)
+from soyyo.constantes import EstadoSistema, FirmaInvalidaError
 from soyyo.mensajes import (MSG_FICHERO_CORRUPTO, MSG_FIRMA_INVALIDA, MSG_SALIENDO_ERROR, MSG_SALIENDO_OK,
-                            MSG_SIN_KEYRING,
-                            MSG_SIN_PEPPER)
+                            MSG_SIN_KEYRING, MSG_SIN_PEPPER, )
 
 log = logging.getLogger(__name__)
 file_handler = RotatingFileHandler('soyyo.log', maxBytes=1_000_000, backupCount=5)
-logging.basicConfig(level=logging.WARNING,
-                    handlers=[file_handler],
-                    force=True,
-                    format='%(asctime)s [%(name)s] %(levelname)s: %(message)s'
-                    )
+logging.basicConfig(level=logging.WARNING, handlers=[file_handler], force=True,
+                    format='%(asctime)s [%(name)s] %(levelname)s: %(message)s')
 logging.getLogger('soyyo').setLevel(logging.DEBUG)
 
 
@@ -66,6 +61,10 @@ class Aplicacion:
                 return EstadoSistema.FIRMA_INVALIDA
             else:
                 return EstadoSistema.INICIALIZACION_CORRECTA
+        except FirmaInvalidaError:
+            log.exception(FirmaInvalidaError.__doc__)
+            print(MSG_FIRMA_INVALIDA)
+            return EstadoSistema.SALIENDO_ERROR
         except Exception as error:
             log.exception(error)
             print(error)

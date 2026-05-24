@@ -17,9 +17,6 @@ class EstadoSistema(Enum):
     def __str__(self) -> str: ...
 
 
-CURSORES: dict[Enum, Qt.CursorShape]
-
-
 class Zona(Enum):
     ESQUINA_SUPERIOR_IZQUIERDA = ...
     ESQUINA_SUPERIOR_DERECHA = ...
@@ -37,3 +34,11 @@ class ErrorApp(Exception): ...
 
 
 class PepperNotFoundError(ErrorApp): ...
+
+
+class FirmaInvalidaError(ErrorApp): ...
+
+
+CURSORES: dict[Enum, Qt.CursorShape]
+
+TIEMPO_DE_BLOQUEO: dict[int, int]

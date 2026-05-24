@@ -59,15 +59,20 @@ class PepperNotFoundError(ErrorApp):
     pass
 
 
-CURSORES = {
-        Zona.BORDE_SUPERIOR: Qt.CursorShape.SizeVerCursor,
-        Zona.BORDE_INFERIOR: Qt.CursorShape.SizeVerCursor,
-        Zona.BORDE_IZQUIERDO: Qt.CursorShape.SizeHorCursor,
-        Zona.BORDE_DERECHO: Qt.CursorShape.SizeHorCursor,
-        Zona.ESQUINA_SUPERIOR_IZQUIERDA: Qt.CursorShape.SizeFDiagCursor,
-        Zona.ESQUINA_INFERIOR_DERECHA: Qt.CursorShape.SizeFDiagCursor,
-        Zona.ESQUINA_SUPERIOR_DERECHA: Qt.CursorShape.SizeBDiagCursor,
-        Zona.ESQUINA_INFERIOR_IZQUIERDA: Qt.CursorShape.SizeBDiagCursor,
-        Zona.BARRA: Qt.CursorShape.SizeAllCursor,
-        Zona.INTERIOR: Qt.CursorShape.ArrowCursor,
-        }
+class FirmaInvalidaError(ErrorApp):
+    """
+    La firma del fichero no es válida. El fichero ha sido manipulado.
+    """
+
+
+CURSORES = {Zona.BORDE_SUPERIOR: Qt.CursorShape.SizeVerCursor,
+            Zona.BORDE_INFERIOR: Qt.CursorShape.SizeVerCursor,
+            Zona.BORDE_IZQUIERDO: Qt.CursorShape.SizeHorCursor,
+            Zona.BORDE_DERECHO: Qt.CursorShape.SizeHorCursor,
+            Zona.ESQUINA_SUPERIOR_IZQUIERDA: Qt.CursorShape.SizeFDiagCursor,
+            Zona.ESQUINA_INFERIOR_DERECHA: Qt.CursorShape.SizeFDiagCursor,
+            Zona.ESQUINA_SUPERIOR_DERECHA: Qt.CursorShape.SizeBDiagCursor,
+            Zona.ESQUINA_INFERIOR_IZQUIERDA: Qt.CursorShape.SizeBDiagCursor,
+            Zona.BARRA: Qt.CursorShape.SizeAllCursor, Zona.INTERIOR: Qt.CursorShape.ArrowCursor, }
+
+TIEMPO_DE_BLOQUEO = {1: 1, 2: 5, 3: 15, 4: 30, 5: 60, 6: 4 * 60, 7: 12 * 60, 8: 24 * 60, 9: 48 * 60}
