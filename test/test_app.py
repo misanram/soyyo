@@ -69,7 +69,7 @@ def test__comprueba_estado_todo_ok():
           patch('soyyo.app.chek_integridad_json', return_value=True),
           patch('soyyo.app.chek_firma', return_value=True)):
         app = Aplicacion(argparse.Namespace())
-        assert app._comprueba_estado() == EstadoSistema.OK
+        assert app._comprueba_estado() == EstadoSistema.INICIALIZACION_CORRECTA
 
 
 def test__comprueba_estado_exception_en_chek():
@@ -83,18 +83,19 @@ def test__comprueba_estado_exception_en_chek():
 
 
 def test_run_reset(capsys):
-    with (patch.object(Aplicacion, '_comprueba_estado', return_value=EstadoSistema.OK),
+    with (patch.object(Aplicacion, '_comprueba_estado', return_value=EstadoSistema.INICIALIZACION_CORRECTA),
           patch('sys.argv', ['soyyo', '--reset']),
           patch('soyyo.app.reset', return_value=EstadoSistema.PRIMER_ARRANQUE),
-          patch('soyyo.app.setup', return_value=EstadoSistema.OK),
+          patch('soyyo.app.setup', return_value=EstadoSistema.SALIENDO_OK),
           ):
-        main()
+        with pytest.raises(SystemExit):
+            main()
     captured = capsys.readouterr()
-    assert 'True' in captured.out
+    assert ' Aplicación finalizada.' in captured.out
 
 
 def test_run_captura(capsys):
-    with (patch.object(Aplicacion, '_comprueba_estado', return_value=EstadoSistema.OK),
+    with (patch.object(Aplicacion, '_comprueba_estado', return_value=EstadoSistema.AUTORIZADO),
           patch('sys.argv', ['soyyo', '--captura']),
           patch('soyyo.app.captura', return_value=EstadoSistema.SALIENDO_OK),
           ):
@@ -157,8 +158,9 @@ def test_run_saliendo_error():
 
 
 def test_main(capsys):
-    with (patch.object(Aplicacion, '_comprueba_estado', return_value=EstadoSistema.OK),
-          patch('sys.argv', ['soyyo'])):
+    with (patch.object(Aplicacion, '_comprueba_estado', return_value=EstadoSistema.INICIALIZACION_CORRECTA),
+          patch('sys.argv', ['soyyo']),
+          patch('soyyo.app.autorizar', return_value=EstadoSistema.AUTORIZADO), ):
         main()
     captured = capsys.readouterr()
     assert 'True' in captured.out

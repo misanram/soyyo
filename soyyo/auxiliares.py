@@ -3,6 +3,7 @@ Funciones auxiliares del programa
 """
 
 import base64
+import hashlib
 import hmac
 import json
 import logging
@@ -13,6 +14,8 @@ import tty
 
 import keyring.errors as keyring_errors
 from keyring import get_password, set_password
+
+from soyyo.constantes import PepperNotFoundError
 
 log = logging.getLogger(__name__)
 
@@ -76,7 +79,7 @@ def chek_firma(data_path):
     return hmac.compare_digest(firma, nueva_firma)
 
 
-def validate_pin(prompt_head):
+def obtener_pin(prompt_head):
     """
     This function is designed to capture the parameters for app.
     It captures input and validates the data obtained.
@@ -140,3 +143,20 @@ def validate_pin(prompt_head):
             continue
 
         return data
+
+
+def validar_pin(data_path, pin):
+    """
+    Se comprueba que el PIN recibido es correcto
+    """
+
+    with open(data_path, 'r', encoding='utf8') as fin:
+        datos = json.load(fin)
+        hash64 = base64.b64decode(datos['autorizacion']['hash'])
+        salt64 = base64.b64decode(datos['autorizacion']['salt'])
+    pepper64 = get_password('soyyo', 'pepper')
+    if pepper64:
+        pepper64_b = base64.b64decode(pepper64)
+        dk = hashlib.pbkdf2_hmac('sha256', bytes(pin) + pepper64_b, salt64, 500_000, dklen=64)
+        return hmac.compare_digest(dk[:32], hash64)
+    raise PepperNotFoundError

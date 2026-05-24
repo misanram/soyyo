@@ -17,9 +17,10 @@ class EstadoSistema(Enum):
     SIN_PEPPER = 'Sin pepper'  # No hay pepper en el keyring
     FICHERO_CORRUPTO = 'Fichero corrupto'  # JSON inválido o ilegible
     FIRMA_INVALIDA = 'Firma invalida'  # El fichero ha sido manipulado
-    OK = 'OK'  # Todo correcto
+    INICIALIZACION_CORRECTA = 'Porgrama iniciado correctamente (no autorizado)'
     SALIENDO_OK = 'Saliendo OK'  # El programa termina normalmente
     SALIENDO_ERROR = 'Saliendo con error'  # El porgrama termina en error
+    AUTORIZADO = 'PIN comprobado, progrma listo para funcionar'  # Programa operativo
 
     def __str__(self):
         return self.value
@@ -46,6 +47,15 @@ class ErrorApp(Exception):
     """
     Error de la aplicación
     """
+
+    pass
+
+
+class PepperNotFoundError(ErrorApp):
+    """
+    get_password no devuelve el pepper
+    """
+
     pass
 
 

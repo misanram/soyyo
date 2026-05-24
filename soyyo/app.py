@@ -8,7 +8,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from soyyo.acciones import captura, reset, setup
+from soyyo.acciones import autorizar, captura, reset, setup
 from soyyo.auxiliares import (chek_almacen, chek_firma, chek_integridad_json, chek_keyring,
                               chek_pepper)
 from soyyo.constantes import EstadoSistema
@@ -65,7 +65,7 @@ class Aplicacion:
             elif not chek_firma(self.data_path):
                 return EstadoSistema.FIRMA_INVALIDA
             else:
-                return EstadoSistema.OK
+                return EstadoSistema.INICIALIZACION_CORRECTA
         except Exception as error:
             log.exception(error)
             print(error)
@@ -111,7 +111,10 @@ class Aplicacion:
             elif estado == EstadoSistema.PRIMER_ARRANQUE:
                 estado = setup(self.data_path)
 
-            elif estado == EstadoSistema.OK:
+            elif estado == EstadoSistema.INICIALIZACION_CORRECTA:
+                estado = autorizar(self.data_path)
+
+            elif estado == EstadoSistema.AUTORIZADO:
                 if self.args.captura:
                     estado = captura()
                 else:

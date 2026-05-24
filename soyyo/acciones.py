@@ -21,8 +21,8 @@ from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 from pyzbar.pyzbar import decode
 
-from soyyo.auxiliares import validate_pin
-from soyyo.constantes import CURSORES, EstadoSistema, Zona
+from soyyo.auxiliares import obtener_pin, validar_pin
+from soyyo.constantes import CURSORES, EstadoSistema, PepperNotFoundError, Zona
 from soyyo.mensajes import (MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_PROMPT_RESET, MSG_RESET_REALIZADO,
                             MSG_SETUP)
 
@@ -222,7 +222,7 @@ class VentanaCaptura(QWidget):
 
 def setup(data_path):
     """
-    Pide el PIN y lo guarda.
+    Pide el PIN y lo guarda en el keyring.
     """
 
     while True:
@@ -233,7 +233,7 @@ def setup(data_path):
         preguntas = ['PIN', 'Repita el PIN']
 
         try:
-            pines = [validate_pin(arg) for arg in preguntas]
+            pines = [obtener_pin(arg) for arg in preguntas]
             print('\r')
         except KeyboardInterrupt:
             return EstadoSistema.SALIENDO_OK
@@ -277,7 +277,7 @@ def setup(data_path):
         datos['firma'] = firma  # type: ignore
         with open(data_path, 'w', encoding='utf8') as fout:
             json.dump(datos, fout, sort_keys=True, separators=(',', ':'))
-        return EstadoSistema.OK
+        return EstadoSistema.INICIALIZACION_CORRECTA
     except OSError as error:
         log.error(error)
         delete_password('soyyo', 'pepper')
@@ -341,5 +341,36 @@ def captura():
     else:
         print(MSG_ERROR_CAPTURA)
         return EstadoSistema.SALIENDO_ERROR
+
+    return EstadoSistema.SALIENDO_OK
+
+
+def autorizar(data_path):
+    """
+    Se solicita el PIN y se comprueba, si es correccto se devuelve EstadoSistema.AUTORIZADO,
+    en caso contrario se gestiona el bloqueo actualizando el fichero json con el número de intento y en
+    caso necesario con el tiempo de bloqueo y el contador de bloqueos.
+    """
+
+    while (intento := 1) <= 3:
+        if sys.stdout.isatty():
+            print('\033[2J\033[H', end='')  # pragma: no cover
+        try:
+            pin = obtener_pin('Introduzca el PIN')
+            print('\r')
+        except KeyboardInterrupt:
+            return EstadoSistema.SALIENDO_OK
+
+        try:
+            if validar_pin(pin):
+                log.info('PIN correcto')
+                return EstadoSistema.AUTORIZADO
+            else:
+                log.info('PIN erróneo, intento %s', intento)
+                intento += 1
+                continue
+        except PepperNotFoundError:
+            log.error('get_password no ha devuelto un pepper valido.')
+            return EstadoSistema.SIN_PEPPER
 
     return EstadoSistema.SALIENDO_OK
