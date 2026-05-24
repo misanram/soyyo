@@ -23,7 +23,8 @@ from pyzbar.pyzbar import decode
 
 from soyyo.auxiliares import validate_pin
 from soyyo.constantes import CURSORES, EstadoSistema, Zona
-from soyyo.mensajes import MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_PROMPT_RESET, MSG_SETUP
+from soyyo.mensajes import (MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_PROMPT_RESET, MSG_RESET_REALIZADO,
+                            MSG_SETUP)
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
 log = logging.getLogger(__name__)
@@ -233,20 +234,26 @@ def setup(data_path):
 
         try:
             pines = [validate_pin(arg) for arg in preguntas]
+            print('\r')
         except KeyboardInterrupt:
             return EstadoSistema.SALIENDO_OK
 
-        if len(set(pines)) != 1:
+        if pines[0] != pines[1]:
             print('\nAmbos valores deben ser iguales.\n\n')
             time.sleep(1)
             continue
         break
 
-    pin = str(set(pines).pop())
+    pin = pines.pop()
+    pines.clear()
     salt = os.urandom(32)
     pepper = os.urandom(32)
 
-    dk = hashlib.pbkdf2_hmac('sha256', pin.encode(), salt, 500_000)
+    dk = hashlib.pbkdf2_hmac('sha256', bytes(pin) + pepper, salt, 500_000)
+
+    for i in range(len(pin)):
+        pin[i] = 0
+    del pin
 
     hash_64 = base64.b64encode(dk).decode('utf-8')
     salt_64 = base64.b64encode(salt).decode('utf-8')
@@ -257,7 +264,7 @@ def setup(data_path):
 
     datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'totp': totp}
     cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
-    firma = hmac.new(pepper, cadena_json, 'sha512').hexdigest()
+    firma = hmac.new(pepper, cadena_json, hashlib.sha512).hexdigest()
 
     try:
         set_password('soyyo', 'pepper', pepper_64)
@@ -267,12 +274,11 @@ def setup(data_path):
         return EstadoSistema.SALIENDO_ERROR
 
     try:
-        datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'totp': totp,
-                 'firma': firma}
+        datos['firma'] = firma  # type: ignore
         with open(data_path, 'w', encoding='utf8') as fout:
             json.dump(datos, fout, sort_keys=True, separators=(',', ':'))
         return EstadoSistema.OK
-    except Exception as error:
+    except OSError as error:
         log.error(error)
         delete_password('soyyo', 'pepper')
         print(error)
@@ -305,6 +311,7 @@ def reset(data_path):
                 delete_password('soyyo', 'pepper')
             except keyring_errors.PasswordDeleteError:
                 pass
+            print(MSG_RESET_REALIZADO)
             return EstadoSistema.PRIMER_ARRANQUE
         else:
             return EstadoSistema.SALIENDO_OK

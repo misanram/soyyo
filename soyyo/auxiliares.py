@@ -6,8 +6,10 @@ import base64
 import hmac
 import json
 import logging
+import sys
+import termios
 import time
-from getpass import getpass
+import tty
 
 import keyring.errors as keyring_errors
 from keyring import get_password, set_password
@@ -92,23 +94,49 @@ def validate_pin(prompt_head):
         The data validated or KeyboardInterrupt
     """
 
-    prompt = f'\n{prompt_head}: '
+    prompt = f'\n\r{prompt_head}: '
 
     while True:
         try:
-            data = getpass(prompt, echo_char='*').strip()
+            fd = sys.stdin.fileno()
+            old = termios.tcgetattr(fd)
+            data = bytearray()
+            try:
+                tty.setraw(fd)
+                sys.stdout.write(prompt)
+                sys.stdout.flush()
+                while True:
+                    ch = sys.stdin.buffer.read(1)
+                    if ch[0] not in (3, 10, 13, 127) and (ch[0] < 48 or ch[0] > 57):
+                        sys.stdout.write('✗')
+                        sys.stdout.flush()
+                        time.sleep(0.1)
+                        sys.stdout.write('\b \b')
+                        sys.stdout.flush()
+                        sys.stdout.write('\x07')
+                        sys.stdout.flush()
+                        continue
+                    if ch in (b'\n', b'\r'):
+                        break
+                    elif ch == b'\x7f':  # backspace
+                        if data:
+                            data.pop()
+                            sys.stdout.write('\b \b')  # retrocede, sobreescribe con espacio, retrocede
+                            sys.stdout.flush()
+                    elif ch[0] == 3:  # ^C en modo raw
+                        raise KeyboardInterrupt
+                    else:
+                        data += ch
+                        sys.stdout.write('*')
+                        sys.stdout.flush()
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old)
         except KeyboardInterrupt:
             raise
 
         if not (8 <= len(data) <= 20):
             print('\nEl PIN debe tener entre 8 y 20 cifras.\n')
             time.sleep(1)
-            continue
-
-        try:
-            int(data)
-        except ValueError:
-            print('\nTodos los caracteres deben ser numéricos.')
             continue
 
         return data

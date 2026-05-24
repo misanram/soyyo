@@ -86,16 +86,7 @@ def test_setup_sin_error(tmp_path):
     fichero = tmp_path / 'datos.json'
     fichero.touch()
     with (patch('soyyo.acciones.set_password'),
-          patch('soyyo.acciones.validate_pin', return_value='12345678')):
-        setup(fichero)
-    assert fichero.exists()
-
-
-def test_setup_sin_error_pin_no_ascii(tmp_path):
-    fichero = tmp_path / 'datos.json'
-    fichero.touch()
-    with (patch('soyyo.acciones.set_password'),
-          patch('soyyo.acciones.validate_pin', return_value='١٢٣٤٥٦٧٨')):
+          patch('soyyo.acciones.validate_pin', return_value=bytearray(b'12345678'))):
         setup(fichero)
     assert fichero.exists()
 
@@ -109,7 +100,8 @@ def test_setup_keyboard_interrupt(tmp_path, capsys):
 def test_setup_pines_distintos(tmp_path, capsys):
     fichero = tmp_path / 'datos.json'
     with (patch('soyyo.acciones.set_password'),
-          patch('soyyo.acciones.validate_pin', side_effect=[0, 1, '12345678', '12345678'])):
+          patch('soyyo.acciones.validate_pin', side_effect=[bytearray(b'0'), bytearray(b'1'), bytearray(
+                  b'12345678'), bytearray(b'12345678')])):
         setup(fichero)
         captured = capsys.readouterr()
     assert '\nAmbos valores deben ser iguales.\n\n' in captured.out
@@ -118,7 +110,7 @@ def test_setup_pines_distintos(tmp_path, capsys):
 def test_setup_set_keyring_error(tmp_path):
     fichero = tmp_path / 'datos.json'
     fichero.touch()
-    with (patch('soyyo.acciones.validate_pin', return_value='12345678'),
+    with (patch('soyyo.acciones.validate_pin', return_value=bytearray(b'12345678')),
           patch('soyyo.acciones.set_password', side_effect=keyring_errors.PasswordSetError)):
         assert setup(fichero) == EstadoSistema.SALIENDO_ERROR
 
@@ -129,7 +121,7 @@ def test_setup_file_write_error(tmp_path, capsys):
     fichero.chmod(0o444)
     with (patch('soyyo.acciones.set_password'),
           patch('soyyo.acciones.delete_password'),
-          patch('soyyo.acciones.validate_pin', return_value='12345678')):
+          patch('soyyo.acciones.validate_pin', return_value=bytearray(b'12345678'))):
         assert setup(fichero) == EstadoSistema.SALIENDO_ERROR
 
 
@@ -138,7 +130,7 @@ def test_setup_delete_password_keyring_error(tmp_path):
     fichero.touch()
     fichero.chmod(0o444)
     with (patch('soyyo.acciones.set_password'),
-          patch('soyyo.acciones.validate_pin', return_value='12345678'),
+          patch('soyyo.acciones.validate_pin', return_value=bytearray(b'12345678')),
           patch('soyyo.acciones.delete_password', side_effect=keyring_errors.PasswordDeleteError)):
         with pytest.raises(keyring_errors.PasswordDeleteError):
             setup(fichero)

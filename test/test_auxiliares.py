@@ -122,51 +122,134 @@ def test_chek_firma_sin_pepper(almacen_valido):
             chek_firma(fichero)
 
 
-def test_validate_pin_pin_valido():
-    with patch('soyyo.auxiliares.getpass', return_value='012345678'):
-        resultado = validate_pin('')
-    assert resultado == '012345678'
+def test_validate_pin_pin_valido_salto_de_linea():
+    teclas = [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\n']
+    with patch('termios.tcgetattr', return_value=[]):
+        with patch('termios.tcsetattr'):
+            with patch('tty.setraw'):
+                with patch('sys.stdin.buffer.read', side_effect=teclas):
+                    with patch('sys.stdin.fileno', return_value=0):
+                        resultado = validate_pin('PIN: ')
+    assert resultado == bytearray(b'12345678')
 
 
-def test_validate_pin_pin_valido_no_ascii():
-    with patch('soyyo.auxiliares.getpass', return_value='١٢٣٤٥٦٧٨'):
-        resultado = validate_pin('')
-    assert resultado == '١٢٣٤٥٦٧٨'
+def test_validate_pin_pin_valido_retorno_de_carro():
+    teclas = [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\r']
+    with patch('termios.tcgetattr', return_value=[]):
+        with patch('termios.tcsetattr'):
+            with patch('tty.setraw'):
+                with patch('sys.stdin.buffer.read', side_effect=teclas):
+                    with patch('sys.stdin.fileno', return_value=0):
+                        resultado = validate_pin('PIN: ')
+    assert resultado == bytearray(b'12345678')
+
+
+def test_validate_pin_pin_valido_backspace():
+    teclas = [b'1', b'2', b'3', b'3', b'\x7f', b'4', b'5', b'6', b'7', b'8', b'\r']
+    with patch('termios.tcgetattr', return_value=[]):
+        with patch('termios.tcsetattr'):
+            with patch('tty.setraw'):
+                with patch('sys.stdin.buffer.read', side_effect=teclas):
+                    with patch('sys.stdin.fileno', return_value=0):
+                        resultado = validate_pin('PIN: ')
+    assert resultado == bytearray(b'12345678')
+
+
+def test_validate_pin_pin_valido_backspace_inicio():
+    teclas = [b'\x7f', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\r']
+    with patch('termios.tcgetattr', return_value=[]):
+        with patch('termios.tcsetattr'):
+            with patch('tty.setraw'):
+                with patch('sys.stdin.buffer.read', side_effect=teclas):
+                    with patch('sys.stdin.fileno', return_value=0):
+                        resultado = validate_pin('PIN: ')
+    assert resultado == bytearray(b'12345678')
+
+
+def test_validate_pin_pin_valido_caracter_no_ascii():
+    teclas = [b'\xc3', b'\xa9',  # primer byte de 'é' y segundo byte de 'é'
+              b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\r']
+
+    with patch('termios.tcgetattr', return_value=[]):
+        with patch('termios.tcsetattr'):
+            with patch('tty.setraw'):
+                with patch('sys.stdin.buffer.read', side_effect=teclas):
+                    with patch('sys.stdin.fileno', return_value=0):
+                        resultado = validate_pin('PIN: ')
+    assert resultado == bytearray(b'12345678')
 
 
 def test_validate_pin_pin_corto(capsys):
-    with patch('soyyo.auxiliares.getpass', side_effect=['1', '12345678']):
-        resultado = validate_pin('')
-        captured = capsys.readouterr()
+    teclas = [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'\r', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8',
+              b'\r']
+    with patch('termios.tcgetattr', return_value=[]):
+        with patch('termios.tcsetattr'):
+            with patch('tty.setraw'):
+                with patch('sys.stdin.buffer.read', side_effect=teclas):
+                    with patch('sys.stdin.fileno', return_value=0):
+                        resultado = validate_pin('PIN: ')
+                        captured = capsys.readouterr()
     assert '\nEl PIN debe tener entre 8 y 20 cifras.\n' in captured.out
-    assert resultado == '12345678'
+    assert resultado == bytearray(b'12345678')
 
 
 def test_validate_pin_pin_vacio(capsys):
-    with patch('soyyo.auxiliares.getpass', side_effect=['', '12345678']):
-        resultado = validate_pin('')
-        captured = capsys.readouterr()
+    teclas = [b'\r', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\r']
+    with patch('termios.tcgetattr', return_value=[]):
+        with patch('termios.tcsetattr'):
+            with patch('tty.setraw'):
+                with patch('sys.stdin.buffer.read', side_effect=teclas):
+                    with patch('sys.stdin.fileno', return_value=0):
+                        resultado = validate_pin('PIN: ')
+                        captured = capsys.readouterr()
     assert '\nEl PIN debe tener entre 8 y 20 cifras.\n' in captured.out
-    assert resultado == '12345678'
+    assert resultado == bytearray(b'12345678')
 
 
 def test_validate_pin_pin_largo(capsys):
-    with patch('soyyo.auxiliares.getpass', side_effect=['123456789012345678901', '12345678']):
-        resultado = validate_pin('')
-        captured = capsys.readouterr()
+    teclas = [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'0', b'1', b'2', b'3', b'4', b'5', b'6',
+              b'7', b'8', b'9', b'0', b'1', b'2', b'3', b'4', b'\r', b'1', b'2', b'3', b'4', b'5', b'6', b'7',
+              b'8', b'\r']
+    with patch('termios.tcgetattr', return_value=[]):
+        with patch('termios.tcsetattr'):
+            with patch('tty.setraw'):
+                with patch('sys.stdin.buffer.read', side_effect=teclas):
+                    with patch('sys.stdin.fileno', return_value=0):
+                        resultado = validate_pin('PIN: ')
+                        captured = capsys.readouterr()
     assert '\nEl PIN debe tener entre 8 y 20 cifras.\n' in captured.out
-    assert resultado == '12345678'
-
-
-def test_validate_pin_pin_no_numerico(capsys):
-    with patch('soyyo.auxiliares.getpass', side_effect=['12345678O', '12345678']):
-        resultado = validate_pin('')
-        captured = capsys.readouterr()
-    assert '\nTodos los caracteres deben ser numéricos.' in captured.out
-    assert resultado == '12345678'
+    assert resultado == bytearray(b'12345678')
 
 
 def test_validate_pin_keyboard_interrupt():
-    with patch('soyyo.auxiliares.getpass', side_effect=KeyboardInterrupt):
-        with pytest.raises(KeyboardInterrupt):
-            validate_pin('')
+    with patch('termios.tcgetattr', return_value=[]):
+        with patch('termios.tcsetattr'):
+            with patch('tty.setraw'):
+                with patch('sys.stdin.buffer.read', side_effect=KeyboardInterrupt):
+                    with patch('sys.stdin.fileno', return_value=0):
+                        with pytest.raises(KeyboardInterrupt):
+                            validate_pin('')
+
+
+def test_validate_pin_keyboard_interrupt_caracter():
+    teclas = [b'\x03']
+    with patch('termios.tcgetattr', return_value=[]):
+        with patch('termios.tcsetattr'):
+            with patch('tty.setraw'):
+                with patch('sys.stdin.buffer.read', side_effect=teclas):
+                    with patch('sys.stdin.fileno', return_value=0):
+                        with pytest.raises(KeyboardInterrupt):
+                            validate_pin('')
+
+
+def test_caracter_invalido_genera_bell():
+    teclas = [b'z', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\r']
+    with patch('termios.tcgetattr', return_value=[]):
+        with patch('termios.tcsetattr'):
+            with patch('tty.setraw'):
+                with patch('sys.stdin.buffer.read', side_effect=teclas):
+                    with patch('sys.stdin.fileno', return_value=0):
+                        with patch('sys.stdout.write') as mock_write:
+                            validate_pin('PIN: ')
+                            llamadas = [args[0] for args, kwargs in mock_write.call_args_list]
+                            assert '\x07' in llamadas

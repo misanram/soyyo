@@ -54,7 +54,13 @@ MSG_PROMPT_RESET = """
 
         Ha solicitado eliminar por completo toda la configuración.
 
-        Ello eliminará todas sus secreto TOTP almacenados.
+        Ello eliminará todas sus secretos TOTP almacenados.
 
         Este paso es irreversible.
         Si/No/Cancelar: """
+
+MSG_RESET_REALIZADO = """
+        
+
+        Reset realizado
+"""
