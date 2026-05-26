@@ -107,6 +107,19 @@ def test_reset_S_keyring_error(tmp_path):
     assert respuesta == EstadoSistema.PRIMER_ARRANQUE
 
 
+def test_setup_sin_error2(tmp_path):
+    fichero = tmp_path / 'datos.json'
+    fichero.touch()
+    pepper_almacenado = {}  # actúa como keyring en memoria
+    def fake_set_password(servicio, usuario, valor):
+        pepper_almacenado[(servicio, usuario)] = valor
+    def fake_get_password(servicio, usuario):
+        return pepper_almacenado.get((servicio, usuario))
+    with (patch('soyyo.acciones.set_password', side_effect=fake_set_password),
+          patch('soyyo.auxiliares.get_password', side_effect=fake_get_password),
+          patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678'))):
+        assert setup(fichero) == EstadoSistema.INICIALIZACION_CORRECTA
+
 def test_setup_sin_error(tmp_path):
     fichero = tmp_path / 'datos.json'
     fichero.touch()
