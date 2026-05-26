@@ -5,8 +5,6 @@ Acciones que reliza el programa
 
 import base64
 import hashlib
-import hmac
-import json
 import logging
 import os
 import sys
@@ -107,8 +105,8 @@ class VentanaCaptura(QWidget):
         Gestión del evento cuando se presiona el botón izquierdo del ratón.
         """
 
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._clic_pos = event.position().toPoint()  # posición relativa al widget
+        if event.button() == Qt.MouseButton.LeftButton:  # pragma: no branch
+            self._clic_pos = event.position().toPoint()
             self._zona_activa = self._zona_actual(self._clic_pos)
             self._ancho_original = self.size().width()
             self._alto_original = self.size().height()
@@ -219,71 +217,6 @@ class VentanaCaptura(QWidget):
         painter.drawRect(QRect(0, 40, self.width() - 1, self.height() - 41))
 
 
-def setup(data_path):
-    """
-    Pide el PIN y lo guarda en el keyring.
-    """
-
-    while True:
-        if sys.stdout.isatty():
-            print('\033[2J\033[H', end='')  # pragma: no cover
-
-        print(MSG_SETUP)
-        preguntas = ['PIN', 'Repita el PIN']
-
-        try:
-            pines = [obtener_pin(arg) for arg in preguntas]
-            print('\r')
-        except KeyboardInterrupt:
-            return EstadoSistema.SALIENDO_OK
-
-        if pines[0] != pines[1]:
-            print('\nAmbos valores deben ser iguales.\n\n')
-            time.sleep(1)
-            continue
-        break
-
-    pin = pines.pop()
-    pines.clear()
-    salt = os.urandom(32)
-    pepper = os.urandom(32)
-
-    dk = hashlib.pbkdf2_hmac('sha256', bytes(pin) + pepper, salt, 500_000, dklen=64)
-
-    for i in range(len(pin)):
-        pin[i] = 0
-    del pin
-
-    hash_64 = base64.b64encode(dk).decode('utf-8')
-    salt_64 = base64.b64encode(salt).decode('utf-8')
-    pepper_64 = base64.b64encode(pepper).decode('utf-8')
-
-    autorizacion = {'hash': hash_64, 'salt': salt_64}
-    totp = {}
-
-    datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'bloqueado_hasta': None,
-             'num_bloqueos': 0, 'totp': totp}
-    cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
-    firma = hmac.new(pepper, cadena_json, hashlib.sha512).hexdigest()
-
-    try:
-        set_password('soyyo', 'pepper', pepper_64)
-    except keyring_errors.PasswordSetError as error:
-        log.error(error)
-        print(error)
-        return EstadoSistema.SALIENDO_ERROR
-
-    try:
-        datos['firma'] = firma  # type: ignore
-        if guarda_json(data_path, datos):
-            return EstadoSistema.INICIALIZACION_CORRECTA
-    except OSError as error:
-        log.error(error)
-        delete_password('soyyo', 'pepper')
-        print(error)
-        return EstadoSistema.SALIENDO_ERROR
-
-
 def reset(data_path):
     """
     Elimina (si existen) el almacen de datos y la clave pepper del keyring
@@ -314,6 +247,66 @@ def reset(data_path):
             return EstadoSistema.PRIMER_ARRANQUE
         else:
             return EstadoSistema.SALIENDO_OK
+
+
+def setup(data_path):
+    """
+    Pide el PIN y lo guarda en el keyring.
+    """
+
+    while True:
+        if sys.stdout.isatty():
+            print('\033[2J\033[H', end='')  # pragma: no cover
+
+        print(MSG_SETUP)
+        preguntas = ['PIN', 'Repita el PIN']
+
+        try:
+            pines = [obtener_pin(arg, False) for arg in preguntas]
+            print('\r')
+        except KeyboardInterrupt:
+            return EstadoSistema.SALIENDO_OK
+
+        if pines[0] != pines[1]:
+            print('\nAmbos valores deben ser iguales.\n\n')
+            time.sleep(1)
+            continue
+        break
+
+    pin = pines.pop()
+    pines.clear()
+    salt = os.urandom(32)
+    pepper = os.urandom(32)
+
+    dk = hashlib.pbkdf2_hmac('sha256', bytes(pin) + pepper, salt, 500_000, dklen=64)
+
+    for i in range(len(pin)):
+        pin[i] = 0
+    del pin
+
+    hash_64 = base64.b64encode(dk[:32]).decode('utf-8')
+    salt_64 = base64.b64encode(salt).decode('utf-8')
+    pepper_64 = base64.b64encode(pepper).decode('utf-8')
+
+    autorizacion = {'hash': hash_64, 'salt': salt_64}
+    totp = {}
+    datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'bloqueado_hasta': None,
+             'num_bloqueos': 0, 'totp': totp}
+    try:
+        set_password('soyyo', 'pepper', pepper_64)
+    except keyring_errors.PasswordSetError as error:
+        log.error(error)
+        print(error)
+        return EstadoSistema.SALIENDO_ERROR
+
+    try:
+        guarda_json(data_path, datos)  # guarda_json no devuelve nada, guarda datos o levanta una excepción.
+        return EstadoSistema.INICIALIZACION_CORRECTA
+    except OSError as error:
+        log.error(error)
+        delete_password('soyyo', 'pepper')
+        print(error)
+        return EstadoSistema.SALIENDO_ERROR
 
 
 def captura():
@@ -370,26 +363,26 @@ def autorizar(data_path):
 
         while intento <= 3:
             try:
-                pin = obtener_pin('Introduzca el PIN')
+                pin = obtener_pin('Introduzca el PIN', login=True)
                 print('\r')
             except KeyboardInterrupt:
                 return EstadoSistema.SALIENDO_OK
 
             if validar_pin(data_path, pin):
                 log.info('PIN correcto')
-                datos.update(dict(intento=0, num_bloqueos=0, bloqueado_hasta=None))
+                datos.update(dict(intentos=0, num_bloqueos=0, bloqueado_hasta=None))
                 guarda_json(data_path, datos)
                 return EstadoSistema.AUTORIZADO
             else:
                 log.info('PIN erróneo, intento %s', intento)
                 intento += 1
-                datos.update(dict(intento=intento))
+                datos.update(dict(intentos=intento))
                 guarda_json(data_path, datos)
 
         num_bloqueos += 1
         bloqueado_hasta = (
                 datetime.now(timezone.utc) + timedelta(minutes=TIEMPO_DE_BLOQUEO[num_bloqueos])).isoformat()
-        datos.update(dict(intento=0, num_bloqueos=num_bloqueos, bloqueado_hasta=bloqueado_hasta))
+        datos.update(dict(intentos=0, num_bloqueos=num_bloqueos, bloqueado_hasta=bloqueado_hasta))
         guarda_json(data_path, datos)
         return EstadoSistema.SALIENDO_OK
 

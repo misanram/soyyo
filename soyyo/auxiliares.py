@@ -72,8 +72,7 @@ def chek_firma(data_path):
             datos = json.load(fin)
             firma = datos.pop('firma', None)
             if firma is None:
-                log.warning(FirmaInvalidaError.__doc__)
-                raise FirmaInvalidaError
+                return False
         cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
         pepper = get_password('soyyo', 'pepper')
         nueva_firma = hmac.new(base64.b64decode(pepper), cadena_json, 'sha512').hexdigest()  # type: ignore
@@ -83,7 +82,7 @@ def chek_firma(data_path):
         raise
 
 
-def obtener_pin(prompt_head):
+def obtener_pin(prompt_head, login=False):
     """
     This function is designed to capture the parameters for app.
     It captures input and validates the data obtained.
@@ -141,7 +140,7 @@ def obtener_pin(prompt_head):
         except KeyboardInterrupt:
             raise
 
-        if not (8 <= len(data) <= 20):
+        if not login and not (8 <= len(data) <= 20):
             print('\nEl PIN debe tener entre 8 y 20 cifras.\n')
             time.sleep(1)
             continue
@@ -173,9 +172,17 @@ def guarda_json(data_path, datos):
     """
 
     try:
+        pepper = get_password('soyyo', 'pepper')
+        cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
+        if pepper:
+            pepper64 = base64.b64decode(pepper)
+            firma = hmac.new(pepper64, cadena_json, hashlib.sha512).hexdigest()
+            datos.update(dict(firma=firma))
+        else:
+            log.warning(PepperNotFoundError.__doc__)
+            raise PepperNotFoundError
         with open(data_path, 'w', encoding='utf8') as fout:
             json.dump(datos, fout, sort_keys=True, separators=(',', ':'))
-        return True
     except OSError as error:
         log.warning("Fallo al abrir '%s': %s", data_path, error)
         raise
@@ -194,10 +201,10 @@ def _cargar_y_verificar_almacen(data_path):
                 log.warning(FirmaInvalidaError.__doc__)
                 raise FirmaInvalidaError
         cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
-        pepper64 = get_password('soyyo', 'pepper')
-        if pepper64:
-            pepper64_b = base64.b64decode(pepper64)
-            nueva_firma = hmac.new(pepper64_b, cadena_json, 'sha512').hexdigest()
+        pepper = get_password('soyyo', 'pepper')
+        if pepper:
+            pepper64 = base64.b64decode(pepper)
+            nueva_firma = hmac.new(pepper64, cadena_json, 'sha512').hexdigest()
             if hmac.compare_digest(firma, nueva_firma):
                 return datos
             else:

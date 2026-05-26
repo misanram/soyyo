@@ -8,7 +8,6 @@ $ sudo apt install libzbar0
 
 ### Instalación del paquete
 
-'''bash
+```bash
 $ ./bin/pip install git+https://github.com/misanram/soyyo
-'''
-
+```
