@@ -1,7 +1,7 @@
 ```mermaid
 flowchart TD
 %% Estados    
-    E0([Inicio])
+    E0((Inicio))
     E1[SIN_KEYRING]
     E2[PRIMER_ARRANQUE]
     E3[SIN_PEPPER]
@@ -14,14 +14,20 @@ flowchart TD
 %% Acciones    
     A1(Comprueba\nestado)
     A2(Setup)
-    A3(Autorizar)
+    A3(Reset)
+    A4(Autorizar)
+    A5(Capturar)
 %% Finales    
-    Z0("sys.exit(0)")
+    Z0(("sys.exit(0)"))
     Z1{{"sys.exit(1)"}}
 %% Flujo de estados
     E0 ==> A1
+    E0 ==>|" -- captura "| A1
+    E0 ==>|" -- reset "| A3
     E2 ==> A2
-    E6 ==> A3
+    E6 ==> A4
+    E7 --> A5
+%%  E7 --> ??? 
     E8 --> Z0
     E1 & E3 & E4 & E5 & E9 --> Z1
 %% Resultados de acciones
@@ -33,13 +39,19 @@ flowchart TD
     A1 -->|Firma Inválida| E5
     A1 ==>|Correcto| E6
 %% A2: Setup
-    A2 -->|Error| E9
-    A2 -->|Usuario\ncancela| E8
     A2 ==>|Correcto| E8
-%% A3 Autorizar    
-    A3 ==>|Si| E7
-    A3 -->|NO| E8
-    A3 -->|Error| E3
+    A2 -->|Cancelado| E8
+    A2 -->|Error de sistema| E9
+%% A3: Reset
+    A3 -->|Correcto| E2
+    A3 -->|Cancelado| E8
+%% A4: Autorizar
+    A4 -->|Sin Pepper| E3
+    A4 -->|Fichero Corrupto| E4
+    A4 -->|Firma Inválida| E5
+    A4 ==>|Si| E7
+    A4 -->|NO| E8
+%% A5: Capturar --captura     
 
 ```
 

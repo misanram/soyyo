@@ -25,7 +25,8 @@ from soyyo.constantes import (CURSORES, EstadoApp, FirmaInvalidaError, PepperNot
                               TIEMPO_DE_BLOQUEO, Zona, )
 from soyyo.mensajes import (MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA, MSG_ERROR_CAPTURA,
                             MSG_ERROR_DECODIFICA, MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS,
-                            MSG_FIRMA_INVALIDA, MSG_PROMPT_RESET, MSG_RESET_REALIZADO, MSG_SETUP, )
+                            MSG_FIRMA_INVALIDA, MSG_PROMPT_RESET, MSG_RESET_REALIZADO, MSG_SETUP,
+                            MSG_SIN_PEPPER, )
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
 log = logging.getLogger(__name__)
@@ -388,16 +389,15 @@ def autorizar(data_path):
         datos.update(dict(intentos=0, num_bloqueos=num_bloqueos, bloqueado_hasta=bloqueado_hasta))
         guarda_json(data_path, datos)
         return EstadoApp.SALIENDO_OK
-
     except FirmaInvalidaError:
         log.exception(FirmaInvalidaError.__doc__)
         print(MSG_FIRMA_INVALIDA)
         return EstadoApp.FIRMA_INVALIDA
     except PepperNotFoundError:
         log.exception(PepperNotFoundError.__doc__)
-        print(MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS)
+        print(MSG_SIN_PEPPER)
         return EstadoApp.SIN_PEPPER
     except OSError as error:
         log.exception("Fallo al abrir '%s': %s", data_path, error)
         print(MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS)
-        return EstadoApp.SALIENDO_ERROR
+        return EstadoApp.FICHERO_CORRUPTO

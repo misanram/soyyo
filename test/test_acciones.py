@@ -595,4 +595,4 @@ def test_autorizar_error_lectura_fichero_almacen(almacen_valido):
     fichero, pepper = almacen_valido()
     fichero = Path('/noexiste')
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
-        assert autorizar(fichero) == EstadoApp.SALIENDO_ERROR
+        assert autorizar(fichero) == EstadoApp.FICHERO_CORRUPTO

@@ -19,8 +19,8 @@ def test_get_options_no_args():
 
 def test_get_options_reset():
     with patch('sys.argv', ['soyyo', '--reset']):
-        args = get_options()
-        assert args.reset is True
+        argumentos = get_options().parse_args()
+        assert argumentos.reset is True
 
 
 def test__comprobar_estado_sin_keyring():
@@ -91,23 +91,24 @@ def test_run_estado_autorizado_sin_argumentos(caplog):
           patch('sys.argv', ['soyyo']),
           caplog.at_level(logging.DEBUG)):
         # @formatter:on
-        main()
-
+        with pytest.raises(SystemExit):
+            main()
     mensajes = [r.message for r in caplog.records]
-    assert len(mensajes) == 2
+    assert len(mensajes) == 1
+    assert 'Aplicación llamada sin argumentos.' in mensajes
 
 
 def test_run_estado_erroneo(caplog):
     # @formatter:off
     with (patch.object(Aplicacion, '_comprobar_estado', return_value=None),
-          patch('sys.argv', ['soyyo']),
+          patch('sys.argv', ['soyyo', '--test']),
           caplog.at_level(logging.ERROR)):
         # @formatter:on
         with pytest.raises(SystemExit):
             main()
     mensajes = [r.message for r in caplog.records]
     assert len(mensajes) == 1
-    assert 'La aplicación ha caido en un estado imposible' in mensajes[0]
+    assert 'La aplicación ha caido en un estado imposible:' in mensajes[0]
 
 
 def test_run_reset(capsys):
@@ -117,8 +118,9 @@ def test_run_reset(capsys):
           patch('soyyo.app.reset', return_value=EstadoApp.PRIMER_ARRANQUE),
           patch('soyyo.app.setup', return_value=EstadoApp.SALIENDO_OK), ):
         # @formatter:on
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exc:
             main()
+        assert exc.value.code == 0
     captured = capsys.readouterr()
     assert ' Aplicación finalizada.' in captured.out
 
@@ -129,19 +131,21 @@ def test_run_captura(capsys):
           patch('sys.argv', ['soyyo', '--captura']),
           patch('soyyo.app.captura', return_value=EstadoApp.SALIENDO_OK), ):
         # @formatter:on
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exc:
             main()
+        assert exc.value.code == 0
     captured = capsys.readouterr()
     assert 'Aplicación finalizada' in captured.out
 
 
-def test_run_sin_key_ring(capsys):
+def test_run_sin_keyring(capsys):
     # @formatter:off
     with (patch.object(Aplicacion, '_comprobar_estado', return_value=EstadoApp.SIN_KEYRING),
-          patch('sys.argv', ['soyyo'])):
+          patch('sys.argv', ['soyyo', '--test'])):
         # @formatter:on
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exc:
             main()
+        assert exc.value.code == 1
     captured = capsys.readouterr()
     assert 'No hay un sistema de almacenamiento seguro disponible en este sistema.' in captured.out
 
@@ -149,10 +153,11 @@ def test_run_sin_key_ring(capsys):
 def test_run_sin_pepper(capsys):
     # @formatter:off
     with (patch.object(Aplicacion, '_comprobar_estado', return_value=EstadoApp.SIN_PEPPER),
-          patch('sys.argv', ['soyyo'])):
+          patch('sys.argv', ['soyyo', '--test'])):
         # @formatter:on
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exc:
             main()
+        assert exc.value.code == 1
     captured = capsys.readouterr()
     assert 'No hay clave de firma en el sistema de almacenamiento seguro del sistema.' in captured.out
 
@@ -160,10 +165,11 @@ def test_run_sin_pepper(capsys):
 def test_run_fichero_corrupto(capsys):
     # @formatter:off
     with (patch.object(Aplicacion, '_comprobar_estado', return_value=EstadoApp.FICHERO_CORRUPTO),
-          patch('sys.argv', ['soyyo'])):
+          patch('sys.argv', ['soyyo', '--test'])):
         # @formatter:on
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exc:
             main()
+        assert exc.value.code == 1
     captured = capsys.readouterr()
     assert 'El almacén de datos es ilegible o está corrupto.' in captured.out
 
@@ -171,39 +177,40 @@ def test_run_fichero_corrupto(capsys):
 def test_run_firma_invalida(capsys):
     # @formatter:off
     with (patch.object(Aplicacion, '_comprobar_estado', return_value=EstadoApp.FIRMA_INVALIDA),
-          patch('sys.argv', ['soyyo'])):
+          patch('sys.argv', ['soyyo', '--test'])):
         # @formatter:on
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exc:
             main()
+        assert exc.value.code == 1
     captured = capsys.readouterr()
     assert 'El almacén de datos parece haber sido manipulado' in captured.out
 
 
 def test_run_saliendo_ok():
-    with (patch('sys.argv', ['soyyo']), patch.object(Aplicacion,
-                                                     '_comprobar_estado',
-                                                     return_value=EstadoApp.SALIENDO_OK)):
+    # @formatter:off
+    with (patch('sys.argv', ['soyyo', '--test']),
+          patch.object(Aplicacion,'_comprobar_estado', return_value=EstadoApp.SALIENDO_OK)):
+        # @formatter:on
         with pytest.raises(SystemExit) as exc:
             main()
         assert exc.value.code == 0
 
 
 def test_run_saliendo_error():
-    with (patch('sys.argv', ['soyyo']), patch.object(Aplicacion,
-                                                     '_comprobar_estado',
-                                                     return_value=EstadoApp.SALIENDO_ERROR)):
+    # @formatter:off
+    with (patch('sys.argv', ['soyyo', '--test']),
+          patch.object(Aplicacion, '_comprobar_estado', return_value=EstadoApp.SALIENDO_ERROR)):
+        # @formatter:on
         with pytest.raises(SystemExit) as exc:
             main()
         assert exc.value.code == 1
 
 
 def test_main(capsys):
-    with (patch.object(Aplicacion,
-                       '_comprobar_estado',
-                       return_value=EstadoApp.INICIALIZACION_CORRECTA), patch('sys.argv',
-                                                                              ['soyyo']), patch(
-            'soyyo.app.autorizar',
-            return_value=EstadoApp.AUTORIZADO), ):
+    # @formatter:off
+    with (patch.object(Aplicacion,'_comprobar_estado',return_value=EstadoApp.INICIALIZACION_CORRECTA),
+          patch('sys.argv',['soyyo', '--test']),
+          patch('soyyo.app.autorizar', return_value=EstadoApp.AUTORIZADO),):
         main()
     captured = capsys.readouterr()
     assert 'True' in captured.out

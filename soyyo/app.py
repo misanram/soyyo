@@ -30,13 +30,13 @@ def get_options():
 
     parser = argparse.ArgumentParser(prog='soyyo',
                                      usage='%(prog)s [opción]',
-                                     description='Programa para hacer TOTP',
+                                     description="Programa para gestionar TOTP's",
                                      epilog='', )
     grupo = parser.add_mutually_exclusive_group()
+    grupo.add_argument('--test', action='store_true', help=argparse.SUPPRESS)  # para test con pytest
     grupo.add_argument('--reset', action='store_true', help='Reinicia el programa a su estado de fábrica.')
     grupo.add_argument('--captura', action='store_true', help='Captura un QR.')
-    args = parser.parse_args()
-    return args
+    return parser
 
 
 class Aplicacion:
@@ -132,9 +132,9 @@ class Aplicacion:
                     print(not all(vars(self.args).values()))
                     break
             else:
-                log.exception('La aplicación ha caido en un estado imposible.')
+                log.error('La aplicación ha caido en un estado imposible: %s', estado)
                 sys.exit(1)
-        log.debug(estado)
+        log.debug('Estado final %s', estado)
 
 
 def main():
@@ -142,7 +142,13 @@ def main():
     Arranca el programa
     """
 
-    aplicacion = Aplicacion(get_options())
+    parser = get_options()
+    argumentos = parser.parse_args()
+    if not any(vars(argumentos).values()):
+        parser.print_help()
+        log.debug('Aplicación llamada sin argumentos.')
+        sys.exit(0)
+    aplicacion = Aplicacion(argumentos)
     aplicacion.run()
 
 
