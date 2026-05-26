@@ -295,17 +295,20 @@ def setup(data_path):
     try:
         set_password('soyyo', 'pepper', pepper_64)
     except keyring_errors.PasswordSetError as error:
-        log.error(error)
+        log.exception('Error al guardar el pepper en el keyring,')
         print(error)
         return EstadoApp.SALIENDO_ERROR
-
     try:
         guarda_json(data_path, datos)  # guarda_json no devuelve nada, guarda datos o levanta una excepción.
         return EstadoApp.INICIALIZACION_CORRECTA
     except OSError as error:
-        log.error(error)
-        delete_password('soyyo', 'pepper')
+        log.exception('Error al escribir archivo %s', data_path)
         print(error)
+        try:
+            delete_password('soyyo', 'pepper')
+        except keyring_errors.PasswordDeleteError as sobreerror:
+            log.exception('Error al eliminar el pepper del keyring')
+            print(sobreerror)
         return EstadoApp.SALIENDO_ERROR
 
 

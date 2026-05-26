@@ -30,7 +30,8 @@ def chek_keyring():
         dato = get_password('test_service_name', 'test_username_')
         return dato == 'test_password'
     except keyring_errors.NoKeyringError as error:
-        log.exception(error)
+        log.exception('No hay keyring instalado en el sistema.')
+        print(error)
         return False
 
 
@@ -66,16 +67,16 @@ def comprobar_seguridad(data_path):
         else:
             raise PepperNotFoundError
     except FirmaInvalidaError as error:
-        log.exception(error)
+        log.exception('No hay firma en el archivo o esta es inválida.')
         return EstadoApp.FIRMA_INVALIDA
     except PepperNotFoundError as error:
-        log.exception(error)
+        log.exception('No hay pepper en el keyring')
         return EstadoApp.SIN_PEPPER
     except json.JSONDecodeError as error:
-        log.exception(error)
+        log.exception('Error al abrir el archivo JSON.')
         return EstadoApp.FICHERO_CORRUPTO
     except OSError as error:
-        log.exception("Fallo al abrir '%s': %s", data_path, error)
+        log.exception("Fallo al abrir '%s'", data_path)
         return EstadoApp.FICHERO_CORRUPTO
 
 

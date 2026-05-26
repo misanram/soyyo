@@ -172,8 +172,6 @@ def test_setup_file_write_error(tmp_path):
 
 def test_setup_delete_password_keyring_error(tmp_path):
     fichero = tmp_path / 'datos.json'
-    fichero.touch()
-    fichero.chmod(0o444)
     pepper_almacenado = {}  # actúa como keyring en memoria
 
     def _fake_set_password(servicio, usuario, valor):
@@ -183,13 +181,13 @@ def test_setup_delete_password_keyring_error(tmp_path):
         return pepper_almacenado.get((servicio, usuario))
 
     # @formatter:off
-    with (patch('soyyo.acciones.set_password', side_effect=_fake_set_password),
+    with (patch('soyyo.acciones.guarda_json', side_effect=OSError),
+          patch('soyyo.acciones.set_password', side_effect=_fake_set_password),
           patch('soyyo.auxiliares.get_password', side_effect=_fake_get_password),
           patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678')),
           patch('soyyo.acciones.delete_password', side_effect=keyring_errors.PasswordDeleteError)):
         # @formatter:on
-        with pytest.raises(keyring_errors.PasswordDeleteError):
-            setup(fichero)
+        assert setup(fichero) == EstadoApp.SALIENDO_ERROR
 
 
 def test_ventana_captura_inicial(qtbot):
