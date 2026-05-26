@@ -107,26 +107,20 @@ def test_reset_S_keyring_error(tmp_path):
     assert respuesta == EstadoSistema.PRIMER_ARRANQUE
 
 
-def test_setup_sin_error2(tmp_path):
-    fichero = tmp_path / 'datos.json'
-    fichero.touch()
-    pepper_almacenado = {}  # actúa como keyring en memoria
-    def fake_set_password(servicio, usuario, valor):
-        pepper_almacenado[(servicio, usuario)] = valor
-    def fake_get_password(servicio, usuario):
-        return pepper_almacenado.get((servicio, usuario))
-    with (patch('soyyo.acciones.set_password', side_effect=fake_set_password),
-          patch('soyyo.auxiliares.get_password', side_effect=fake_get_password),
-          patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678'))):
-        assert setup(fichero) == EstadoSistema.INICIALIZACION_CORRECTA
-
 def test_setup_sin_error(tmp_path):
     fichero = tmp_path / 'datos.json'
     fichero.touch()
-    # @formatter:off
-    with (patch('soyyo.acciones.set_password'),
+    pepper_almacenado = {}  # actúa como keyring en memoria
+
+    def _fake_set_password(servicio, usuario, valor):
+        pepper_almacenado[(servicio, usuario)] = valor
+
+    def _fake_get_password(servicio, usuario):
+        return pepper_almacenado.get((servicio, usuario))
+
+    with (patch('soyyo.acciones.set_password', side_effect=_fake_set_password),
+          patch('soyyo.auxiliares.get_password', side_effect=_fake_get_password),
           patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678'))):
-        # @formatter:on
         assert setup(fichero) == EstadoSistema.INICIALIZACION_CORRECTA
 
 
@@ -138,8 +132,17 @@ def test_setup_keyboard_interrupt(tmp_path, capsys):
 
 def test_setup_pines_distintos(tmp_path, capsys):
     fichero = tmp_path / 'datos.json'
+    pepper_almacenado = {}  # actúa como keyring en memoria
+
+    def _fake_set_password(servicio, usuario, valor):
+        pepper_almacenado[(servicio, usuario)] = valor
+
+    def _fake_get_password(servicio, usuario):
+        return pepper_almacenado.get((servicio, usuario))
+
     # @formatter:off
-    with (patch('soyyo.acciones.set_password'),
+    with (patch('soyyo.acciones.set_password', side_effect=_fake_set_password),
+          patch('soyyo.auxiliares.get_password', side_effect=_fake_get_password),
           patch('soyyo.acciones.obtener_pin', side_effect=[bytearray(b'0'), bytearray(b'1'),
                                                            bytearray(b'12345678'),bytearray(b'12345678')])):
         # @formatter:on
@@ -161,9 +164,7 @@ def test_setup_set_keyring_error(tmp_path):
 def test_setup_file_write_error(tmp_path):
     fichero = tmp_path / 'datos.json'
     # @formatter:off
-    with (patch('soyyo.acciones.set_password'),
-          patch('soyyo.acciones.delete_password'),
-          patch('soyyo.acciones.guarda_json', side_effect=OSError),
+    with (patch('soyyo.acciones.guarda_json', side_effect=OSError),
           patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678'))):
         # @formatter:on
         assert setup(fichero) == EstadoSistema.SALIENDO_ERROR
@@ -173,8 +174,17 @@ def test_setup_delete_password_keyring_error(tmp_path):
     fichero = tmp_path / 'datos.json'
     fichero.touch()
     fichero.chmod(0o444)
+    pepper_almacenado = {}  # actúa como keyring en memoria
+
+    def _fake_set_password(servicio, usuario, valor):
+        pepper_almacenado[(servicio, usuario)] = valor
+
+    def _fake_get_password(servicio, usuario):
+        return pepper_almacenado.get((servicio, usuario))
+
     # @formatter:off
-    with (patch('soyyo.acciones.set_password'),
+    with (patch('soyyo.acciones.set_password', side_effect=_fake_set_password),
+          patch('soyyo.auxiliares.get_password', side_effect=_fake_get_password),
           patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678')),
           patch('soyyo.acciones.delete_password', side_effect=keyring_errors.PasswordDeleteError)):
         # @formatter:on

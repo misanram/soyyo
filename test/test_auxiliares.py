@@ -318,9 +318,11 @@ def test_guarda_json_sin_pepper(almacen_valido):
             guarda_json(fichero, {})
 
 
-def test_guarda_json_falla_escritura():
-    with pytest.raises(OSError):
-        guarda_json(Path('/noexiste'), {})
+def test_guarda_json_falla_escritura(almacen_valido):
+    fichero, pepper = almacen_valido
+    with patch('soyyo.auxiliares.get_password', return_value=pepper):
+        with pytest.raises(OSError):
+            guarda_json(Path('/noexiste'), {})
 
 
 def test__cargar_y_verificar_almacen(almacen_valido):
