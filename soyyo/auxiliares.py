@@ -15,7 +15,7 @@ import tty
 import keyring.errors as keyring_errors
 from keyring import get_password, set_password
 
-from soyyo.constantes import FirmaInvalidaError, PepperNotFoundError
+from soyyo.constantes import EstadoApp, FirmaInvalidaError, PepperNotFoundError
 
 log = logging.getLogger(__name__)
 
@@ -29,42 +29,23 @@ def chek_keyring():
         set_password('test_service_name', 'test_username_', 'test_password')
         dato = get_password('test_service_name', 'test_username_')
         return dato == 'test_password'
-    except keyring_errors.NoKeyringError:
+    except keyring_errors.NoKeyringError as error:
+        log.exception(error)
         return False
 
 
 def chek_almacen(data_path):
     """
-    Comprueba si hay un almacen de datos
+    Comprueba si hay un almacen de datos, si no lo hay o estamos inciando la app o se borró accidentalmente.
     """
 
     return data_path.exists()
 
 
-def chek_pepper():
+def comprobar_seguridad(data_path):
     """
-    Chequea que existe un pepper usable en el keyring
-    """
-
-    return get_password('soyyo', 'pepper') is not None
-
-
-def chek_integridad_json(data_path):
-    """
-    Comprueba que el fichero de datos es json es válido
-    """
-
-    try:
-        with open(data_path, 'r', encoding='utf8') as fin:
-            json.load(fin)
-            return True
-    except json.JSONDecodeError:
-        return False
-
-
-def chek_firma(data_path):
-    """
-    Comprueba que la firma del json es válida (que el archivo .json no ha sido manipulado)
+    Comprueba que exista almacen, pepper y firma. Que todo sea legible y correcto. Y que la firma abra el
+    almacén.
     """
 
     try:
@@ -72,14 +53,30 @@ def chek_firma(data_path):
             datos = json.load(fin)
             firma = datos.pop('firma', None)
             if firma is None:
-                return False
+                raise FirmaInvalidaError
         cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
         pepper = get_password('soyyo', 'pepper')
-        nueva_firma = hmac.new(base64.b64decode(pepper), cadena_json, 'sha512').hexdigest()  # type: ignore
-        return hmac.compare_digest(firma, nueva_firma)
+        if pepper:
+            pepper64 = base64.b64decode(pepper)
+            nueva_firma = hmac.new(pepper64, cadena_json, 'sha512').hexdigest()
+            if hmac.compare_digest(firma, nueva_firma):
+                return EstadoApp.INICIALIZACION_CORRECTA
+            else:
+                raise FirmaInvalidaError
+        else:
+            raise PepperNotFoundError
+    except FirmaInvalidaError as error:
+        log.exception(error)
+        return EstadoApp.FIRMA_INVALIDA
+    except PepperNotFoundError as error:
+        log.exception(error)
+        return EstadoApp.SIN_PEPPER
+    except json.JSONDecodeError as error:
+        log.exception(error)
+        return EstadoApp.FICHERO_CORRUPTO
     except OSError as error:
-        log.warning("Fallo al abrir '%s': %s", data_path, error)
-        raise
+        log.exception("Fallo al abrir '%s': %s", data_path, error)
+        return EstadoApp.FICHERO_CORRUPTO
 
 
 def obtener_pin(prompt_head, login=False):

@@ -21,7 +21,7 @@ from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 from pyzbar.pyzbar import decode
 
 from soyyo.auxiliares import _cargar_y_verificar_almacen, guarda_json, obtener_pin, validar_pin
-from soyyo.constantes import (CURSORES, EstadoSistema, FirmaInvalidaError, PepperNotFoundError,
+from soyyo.constantes import (CURSORES, EstadoApp, FirmaInvalidaError, PepperNotFoundError,
                               TIEMPO_DE_BLOQUEO, Zona, )
 from soyyo.mensajes import (MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA, MSG_ERROR_CAPTURA,
                             MSG_ERROR_DECODIFICA, MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS,
@@ -244,9 +244,9 @@ def reset(data_path):
             except keyring_errors.PasswordDeleteError:
                 pass
             print(MSG_RESET_REALIZADO)
-            return EstadoSistema.PRIMER_ARRANQUE
+            return EstadoApp.PRIMER_ARRANQUE
         else:
-            return EstadoSistema.SALIENDO_OK
+            return EstadoApp.SALIENDO_OK
 
 
 def setup(data_path):
@@ -265,7 +265,7 @@ def setup(data_path):
             pines = [obtener_pin(arg, False) for arg in preguntas]
             print('\r')
         except KeyboardInterrupt:
-            return EstadoSistema.SALIENDO_OK
+            return EstadoApp.SALIENDO_OK
 
         if pines[0] != pines[1]:
             print('\nAmbos valores deben ser iguales.\n\n')
@@ -297,16 +297,16 @@ def setup(data_path):
     except keyring_errors.PasswordSetError as error:
         log.error(error)
         print(error)
-        return EstadoSistema.SALIENDO_ERROR
+        return EstadoApp.SALIENDO_ERROR
 
     try:
         guarda_json(data_path, datos)  # guarda_json no devuelve nada, guarda datos o levanta una excepción.
-        return EstadoSistema.INICIALIZACION_CORRECTA
+        return EstadoApp.INICIALIZACION_CORRECTA
     except OSError as error:
         log.error(error)
         delete_password('soyyo', 'pepper')
         print(error)
-        return EstadoSistema.SALIENDO_ERROR
+        return EstadoApp.SALIENDO_ERROR
 
 
 def captura():
@@ -329,17 +329,17 @@ def captura():
             print(decodificada[0].data)
         else:
             print(MSG_ERROR_DECODIFICA)
-            return EstadoSistema.SALIENDO_ERROR
+            return EstadoApp.SALIENDO_ERROR
     else:
         print(MSG_ERROR_CAPTURA)
-        return EstadoSistema.SALIENDO_ERROR
+        return EstadoApp.SALIENDO_ERROR
 
-    return EstadoSistema.SALIENDO_OK
+    return EstadoApp.SALIENDO_OK
 
 
 def autorizar(data_path):
     """
-    Se solicita el PIN y se comprueba, si es correccto se devuelve EstadoSistema.AUTORIZADO,
+    Se solicita el PIN y se comprueba, si es correccto se devuelve EstadoApp.AUTORIZADO,
     en caso contrario se gestiona el bloqueo actualizando el fichero json con el número de intentos y en
     caso necesario con el tiempo de bloqueo y el contador de bloqueos.
     """
@@ -355,24 +355,24 @@ def autorizar(data_path):
             bloqueado_hasta = datetime.fromisoformat(datos['bloqueado_hasta'])
             if datetime.now(timezone.utc) < bloqueado_hasta:
                 print(MSG_ERROR_APP_BLOQUEADA_TEMPORAL % bloqueado_hasta.astimezone().isoformat())
-                return EstadoSistema.SALIENDO_OK
+                return EstadoApp.SALIENDO_OK
         if num_bloqueos >= 10:
             log.info('Aplicación bloqueada')
             print(MSG_ERROR_APP_BLOQUEDA)
-            return EstadoSistema.SALIENDO_OK
+            return EstadoApp.SALIENDO_OK
 
         while intento <= 3:
             try:
                 pin = obtener_pin('Introduzca el PIN', login=True)
                 print('\r')
             except KeyboardInterrupt:
-                return EstadoSistema.SALIENDO_OK
+                return EstadoApp.SALIENDO_OK
 
             if validar_pin(data_path, pin):
                 log.info('PIN correcto')
                 datos.update(dict(intentos=0, num_bloqueos=0, bloqueado_hasta=None))
                 guarda_json(data_path, datos)
-                return EstadoSistema.AUTORIZADO
+                return EstadoApp.AUTORIZADO
             else:
                 log.info('PIN erróneo, intento %s', intento)
                 intento += 1
@@ -384,17 +384,17 @@ def autorizar(data_path):
                 datetime.now(timezone.utc) + timedelta(minutes=TIEMPO_DE_BLOQUEO[num_bloqueos])).isoformat()
         datos.update(dict(intentos=0, num_bloqueos=num_bloqueos, bloqueado_hasta=bloqueado_hasta))
         guarda_json(data_path, datos)
-        return EstadoSistema.SALIENDO_OK
+        return EstadoApp.SALIENDO_OK
 
     except FirmaInvalidaError:
         log.exception(FirmaInvalidaError.__doc__)
         print(MSG_FIRMA_INVALIDA)
-        return EstadoSistema.FIRMA_INVALIDA
+        return EstadoApp.FIRMA_INVALIDA
     except PepperNotFoundError:
         log.exception(PepperNotFoundError.__doc__)
         print(MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS)
-        return EstadoSistema.SIN_PEPPER
+        return EstadoApp.SIN_PEPPER
     except OSError as error:
         log.exception("Fallo al abrir '%s': %s", data_path, error)
         print(MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS)
-        return EstadoSistema.SALIENDO_ERROR
+        return EstadoApp.SALIENDO_ERROR

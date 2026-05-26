@@ -7,7 +7,7 @@ from enum import Enum
 from PySide6.QtCore import Qt
 
 
-class EstadoSistema(Enum):
+class EstadoApp(Enum):
     """
     Enumera los estados en los que puede encontrarse el sistema
     """
@@ -28,7 +28,7 @@ class EstadoSistema(Enum):
 
 class Zona(Enum):
     """
-    Enumera las zonas que tiene una ventaba de captura de QR
+    Enumera las zonas que tiene una ventana de captura de QR
     """
 
     ESQUINA_SUPERIOR_IZQUIERDA = 'esquina_superior_izquierda'

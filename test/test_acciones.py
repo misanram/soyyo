@@ -18,7 +18,7 @@ from PySide6.QtGui import QMouseEvent, QPaintEvent
 from PySide6.QtWidgets import QApplication
 
 from soyyo.acciones import autorizar, captura, reset, setup, VentanaCaptura
-from soyyo.constantes import CURSORES, EstadoSistema, Zona
+from soyyo.constantes import CURSORES, EstadoApp, Zona
 
 ESTIRAR = 'estirar'
 MAXIMO = 'maximo'
@@ -69,20 +69,20 @@ def almacen_valido(tmp_path):
 def test_reset_keyboard_interrupt(tmp_path, capsys):
     fichero = tmp_path / 'datos.json'
     with patch('soyyo.acciones.input', side_effect=KeyboardInterrupt):
-        assert reset(fichero) == EstadoSistema.SALIENDO_OK
+        assert reset(fichero) == EstadoApp.SALIENDO_OK
 
 
 @pytest.mark.parametrize('respuesta', ['N', 'C'])
 def test_reset_NC(tmp_path, respuesta):
     fichero = tmp_path / 'datos.json'
     with patch('soyyo.acciones.input', return_value=respuesta):
-        assert reset(fichero) == EstadoSistema.SALIENDO_OK
+        assert reset(fichero) == EstadoApp.SALIENDO_OK
 
 
 def test_reset_otro_caracter(tmp_path, capsys):
     fichero = tmp_path / 'datos.json'
     with patch('soyyo.acciones.input', side_effect=['^', 'C']):
-        assert reset(fichero) == EstadoSistema.SALIENDO_OK
+        assert reset(fichero) == EstadoApp.SALIENDO_OK
 
 
 def test_reset_S(tmp_path):
@@ -93,7 +93,7 @@ def test_reset_S(tmp_path):
           patch('soyyo.acciones.delete_password', return_value=None)):
         # @formatter:on
         respuesta = reset(fichero)
-    assert respuesta == EstadoSistema.PRIMER_ARRANQUE
+    assert respuesta == EstadoApp.PRIMER_ARRANQUE
 
 
 def test_reset_S_keyring_error(tmp_path):
@@ -104,7 +104,7 @@ def test_reset_S_keyring_error(tmp_path):
           patch('soyyo.acciones.delete_password', side_effect=keyring_errors.PasswordDeleteError)):
         # @formatter:on
         respuesta = reset(fichero)
-    assert respuesta == EstadoSistema.PRIMER_ARRANQUE
+    assert respuesta == EstadoApp.PRIMER_ARRANQUE
 
 
 def test_setup_sin_error(tmp_path):
@@ -121,13 +121,13 @@ def test_setup_sin_error(tmp_path):
     with (patch('soyyo.acciones.set_password', side_effect=_fake_set_password),
           patch('soyyo.auxiliares.get_password', side_effect=_fake_get_password),
           patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678'))):
-        assert setup(fichero) == EstadoSistema.INICIALIZACION_CORRECTA
+        assert setup(fichero) == EstadoApp.INICIALIZACION_CORRECTA
 
 
 def test_setup_keyboard_interrupt(tmp_path, capsys):
     fichero = tmp_path / 'datos.json'
     with patch('soyyo.acciones.obtener_pin', side_effect=KeyboardInterrupt):
-        assert setup(fichero) == EstadoSistema.SALIENDO_OK
+        assert setup(fichero) == EstadoApp.SALIENDO_OK
 
 
 def test_setup_pines_distintos(tmp_path, capsys):
@@ -158,7 +158,7 @@ def test_setup_set_keyring_error(tmp_path):
     with (patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678')),
           patch('soyyo.acciones.set_password', side_effect=keyring_errors.PasswordSetError)):
         # @formatter:on
-        assert setup(fichero) == EstadoSistema.SALIENDO_ERROR
+        assert setup(fichero) == EstadoApp.SALIENDO_ERROR
 
 
 def test_setup_file_write_error(tmp_path):
@@ -167,7 +167,7 @@ def test_setup_file_write_error(tmp_path):
     with (patch('soyyo.acciones.guarda_json', side_effect=OSError),
           patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678'))):
         # @formatter:on
-        assert setup(fichero) == EstadoSistema.SALIENDO_ERROR
+        assert setup(fichero) == EstadoApp.SALIENDO_ERROR
 
 
 def test_setup_delete_password_keyring_error(tmp_path):
@@ -462,7 +462,7 @@ def test_captura():
         with patch('soyyo.acciones.VentanaCaptura') as mock_ventana:
             mock_ventana.return_value.imagen = None
             resultado = captura()
-    assert resultado == EstadoSistema.SALIENDO_ERROR
+    assert resultado == EstadoApp.SALIENDO_ERROR
 
 
 def test_captura_sin_qr():
@@ -471,7 +471,7 @@ def test_captura_sin_qr():
             mock_ventana.return_value.imagen = 'imagen_falsa'
             with patch('soyyo.acciones.decode', return_value=[]):
                 resultado = captura()
-    assert resultado == EstadoSistema.SALIENDO_ERROR
+    assert resultado == EstadoApp.SALIENDO_ERROR
 
 
 def test_captura_ok():
@@ -488,14 +488,14 @@ def test_captura_ok():
         # @formatter:on
         mock_ventana.return_value.imagen = 'imagen_falsa'
         resultado = captura()
-    assert resultado == EstadoSistema.SALIENDO_OK
+    assert resultado == EstadoApp.SALIENDO_OK
 
 
 def test_autorizar_bloqueo_temporal(almacen_valido, capsys):
     fichero, pepper = almacen_valido(minutos_bloqueo=10000)
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
         resultado = autorizar(fichero)
-    assert resultado == EstadoSistema.SALIENDO_OK
+    assert resultado == EstadoApp.SALIENDO_OK
 
 
 def test_autorizar_bloqueo_temporal_finalizado(almacen_valido, capsys):
@@ -505,14 +505,14 @@ def test_autorizar_bloqueo_temporal_finalizado(almacen_valido, capsys):
     with (patch('soyyo.acciones.obtener_pin', return_value=pin),
           patch('soyyo.auxiliares.get_password', return_value=pepper)):
         # @formatter:on
-        assert autorizar(fichero) == EstadoSistema.AUTORIZADO
+        assert autorizar(fichero) == EstadoApp.AUTORIZADO
 
 
 def test_autorizar_bloqueo_permanente(almacen_valido, capsys):
     fichero, pepper = almacen_valido(num_bloqueos=10)
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
         resultado = autorizar(fichero)
-    assert resultado == EstadoSistema.SALIENDO_OK
+    assert resultado == EstadoApp.SALIENDO_OK
 
 
 def test_autorizar_ok(almacen_valido):
@@ -521,12 +521,12 @@ def test_autorizar_ok(almacen_valido):
     with (patch('soyyo.acciones.obtener_pin', return_value=pin), patch('soyyo.auxiliares.get_password',
                                                                        return_value=pepper)):
         # @formatter:on
-        assert autorizar(fichero) == EstadoSistema.AUTORIZADO
+        assert autorizar(fichero) == EstadoApp.AUTORIZADO
 
 
 @pytest.mark.parametrize('pin, respuesta',
-                         [(bytearray(b'1234567'), EstadoSistema.SALIENDO_OK),
-                          (bytearray(b'12345678'), EstadoSistema.AUTORIZADO), ])
+                         [(bytearray(b'1234567'), EstadoApp.SALIENDO_OK),
+                          (bytearray(b'12345678'), EstadoApp.AUTORIZADO), ])
 def test_autorizar_un_fallo(almacen_valido, pin, respuesta):
     fichero, pepper = almacen_valido()
     # @formatter:off
@@ -537,9 +537,9 @@ def test_autorizar_un_fallo(almacen_valido, pin, respuesta):
 
 
 @pytest.mark.parametrize('pin, respuesta',
-                         [(bytearray(b'1234567'), EstadoSistema.SALIENDO_OK),
-                          (bytearray(b'1234567'), EstadoSistema.SALIENDO_OK),
-                          (bytearray(b'12345678'), EstadoSistema.AUTORIZADO), ])
+                         [(bytearray(b'1234567'), EstadoApp.SALIENDO_OK),
+                          (bytearray(b'1234567'), EstadoApp.SALIENDO_OK),
+                          (bytearray(b'12345678'), EstadoApp.AUTORIZADO), ])
 def test_autorizar_dos_fallos(almacen_valido, pin, respuesta):
     fichero, pepper = almacen_valido()
     # @formatter:off
@@ -567,7 +567,7 @@ def test_autorizar_tres_fallos(almacen_valido, caplog):
     assert 'intento 1' in mensajes[0]
     assert 'intento 2' in mensajes[1]
     assert 'intento 3' in mensajes[2]
-    assert resultado == EstadoSistema.SALIENDO_OK
+    assert resultado == EstadoApp.SALIENDO_OK
 
 
 def test_autorizar_KeyboardInterrupt(almacen_valido):
@@ -576,25 +576,25 @@ def test_autorizar_KeyboardInterrupt(almacen_valido):
     with (patch('soyyo.acciones.obtener_pin', side_effect=KeyboardInterrupt),
           patch('soyyo.auxiliares.get_password', return_value=pepper)):
         # @formatter:on
-        assert autorizar(fichero) == EstadoSistema.SALIENDO_OK
+        assert autorizar(fichero) == EstadoApp.SALIENDO_OK
 
 
 def test_autorizar_firma_invalida(almacen_valido):
     fichero, pepper = almacen_valido()
     pepper = base64.b64encode(b'fake_pepper').decode('utf-8')
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
-        assert autorizar(fichero) == EstadoSistema.FIRMA_INVALIDA
+        assert autorizar(fichero) == EstadoApp.FIRMA_INVALIDA
 
 
 def test_autorizar_pepper_not_found(almacen_valido):
     fichero, pepper = almacen_valido()
     pepper = None
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
-        assert autorizar(fichero) == EstadoSistema.SIN_PEPPER
+        assert autorizar(fichero) == EstadoApp.SIN_PEPPER
 
 
 def test_autorizar_error_lectura_fichero_almacen(almacen_valido):
     fichero, pepper = almacen_valido()
     fichero = Path('/noexiste')
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
-        assert autorizar(fichero) == EstadoSistema.SALIENDO_ERROR
+        assert autorizar(fichero) == EstadoApp.SALIENDO_ERROR

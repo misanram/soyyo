@@ -9,22 +9,22 @@ MSG_SIN_KEYRING = """
 
 MSG_SIN_PEPPER = """
     No hay clave de firma en el sistema de almacenamiento seguro del sistema.
-        Los datos TOTP almacenados no son legibles
+        Los datos TOTP almacenados no son legibles sin clave de firma.
         Probablemente deba resetar la aplicación."""
 
 MSG_FICHERO_CORRUPTO = """
     El almacén de datos es ilegible o está corrupto.
-        Los datos TOTP almacenados no son legibles
+        Los datos TOTP almacenados no son legibles.
+        Probablemente deba resetar la aplicación."""
+
+MSG_FIRMA_INVALIDA = """
+    El almacén de datos parece haber sido manipulado o la firma es invalida.
+        Los datos TOTP almacenados no son legibles.
         Probablemente deba resetar la aplicación."""
 
 MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS = """
     Ha ocurrido un error al leer o escribir en el almacen de datos..
         Reinicie la aplicación a ver si hay suerte lapróxima vez."""
-
-MSG_FIRMA_INVALIDA = """
-    El almacén de datos parece haber sido manipulado.
-        Los datos TOTP almacenados no son legibles
-        Probablemente deba resetar la aplicación."""
 
 MSG_SALIENDO_OK = """
     Aplicación finalizada.

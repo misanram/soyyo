@@ -9,8 +9,8 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from soyyo.acciones import autorizar, captura, reset, setup
-from soyyo.auxiliares import (chek_almacen, chek_firma, chek_integridad_json, chek_keyring, chek_pepper)
-from soyyo.constantes import EstadoSistema
+from soyyo.auxiliares import chek_almacen, chek_keyring, comprobar_seguridad
+from soyyo.constantes import EstadoApp
 from soyyo.mensajes import (MSG_FICHERO_CORRUPTO, MSG_FIRMA_INVALIDA, MSG_SALIENDO_ERROR, MSG_SALIENDO_OK,
                             MSG_SIN_KEYRING, MSG_SIN_PEPPER, )
 
@@ -51,69 +51,81 @@ class Aplicacion:
         self.data_path = root_path / 'soyyo_data.json'
         self.args = args
 
-    def _comprueba_estado(self):
-        try:
-            if not chek_keyring():
-                return EstadoSistema.SIN_KEYRING
-            elif not chek_almacen(self.data_path):
-                return EstadoSistema.PRIMER_ARRANQUE
-            elif not chek_pepper():
-                return EstadoSistema.SIN_PEPPER
-            elif not chek_integridad_json(self.data_path):
-                return EstadoSistema.FICHERO_CORRUPTO
-            elif not chek_firma(self.data_path):
-                return EstadoSistema.FIRMA_INVALIDA
-            else:
-                return EstadoSistema.INICIALIZACION_CORRECTA
-        except Exception as error:
-            log.exception(error)
-            print(error)
-            return EstadoSistema.SALIENDO_ERROR
+    def _comprobar_estado(self):
+        """
+           Determina el estado inicial del sistema mediante comprobaciones secuenciales.
+           El orden es estricto: cada comprobación asume que las anteriores han pasado.
+
+           Secuencia:
+               1. Keyring del sistema operativo (requisito de plataforma)
+               2. Existencia del almacén (distingue primer arranque de ejecución normal)
+               3. comprobar_seguridad: Esta función comprueba atómicamente almacen, pepper y firma
+
+           Devuelve:
+               Estados: uno de los siguientes valores:
+                   - INICIALIZACION_CORRECTA → todo en orden
+                   - PRIMER_ARRANQUE → no hay almacén (primera ejecución o datos perdidos)
+                   - SIN_KEYRING → el SO no tiene keyring; el programa no puede funcionar
+                   - SIN_PEPPER → almacén presente, pero pepper ausente; datos irrecuperables
+                   - FICHERO_CORRUPTO → JSON inválido o error de lectura
+                   - FIRMA_INVALIDA → JSON válido, pero la firma no coincide
+
+           Nota:
+               PRIMER_ARRANQUE cubre dos casos: 1) primera ejecución de la app y 2) pérdida accidental
+               del almacén. La interfaz debe informar al usuario de esta ambigüedad.
+           """
+
+        if not chek_keyring():
+            return EstadoApp.SIN_KEYRING
+        elif not chek_almacen(self.data_path):
+            return EstadoApp.PRIMER_ARRANQUE
+        else:
+            return comprobar_seguridad(self.data_path)
 
     def run(self):
         """
         Inicia el programa
         """
 
-        estado = self._comprueba_estado()
+        estado = self._comprobar_estado()
         log.debug(f'Estado inicial: {estado}')
 
-        if self.args.reset and estado not in (EstadoSistema.SIN_KEYRING,):
+        if self.args.reset and estado not in (EstadoApp.SIN_KEYRING,):
             estado = reset(self.data_path)
             log.debug(estado)
 
         while True:
-            if estado == EstadoSistema.SIN_KEYRING:
+            if estado == EstadoApp.SIN_KEYRING:
                 print(MSG_SIN_KEYRING)
                 sys.exit(1)
 
-            elif estado == EstadoSistema.SIN_PEPPER:
+            elif estado == EstadoApp.SIN_PEPPER:
                 print(MSG_SIN_PEPPER)
                 sys.exit(1)
 
-            elif estado == EstadoSistema.FICHERO_CORRUPTO:
+            elif estado == EstadoApp.FICHERO_CORRUPTO:
                 print(MSG_FICHERO_CORRUPTO)
                 sys.exit(1)
 
-            elif estado == EstadoSistema.FIRMA_INVALIDA:
+            elif estado == EstadoApp.FIRMA_INVALIDA:
                 print(MSG_FIRMA_INVALIDA)
                 sys.exit(1)
 
-            elif estado == EstadoSistema.SALIENDO_ERROR:
+            elif estado == EstadoApp.SALIENDO_ERROR:
                 print(MSG_SALIENDO_ERROR)
                 sys.exit(1)
 
-            elif estado == EstadoSistema.SALIENDO_OK:
+            elif estado == EstadoApp.SALIENDO_OK:
                 print(MSG_SALIENDO_OK)
                 sys.exit(0)
 
-            elif estado == EstadoSistema.PRIMER_ARRANQUE:
+            elif estado == EstadoApp.PRIMER_ARRANQUE:
                 estado = setup(self.data_path)
 
-            elif estado == EstadoSistema.INICIALIZACION_CORRECTA:
+            elif estado == EstadoApp.INICIALIZACION_CORRECTA:
                 estado = autorizar(self.data_path)
 
-            elif estado == EstadoSistema.AUTORIZADO:
+            elif estado == EstadoApp.AUTORIZADO:
                 if self.args.captura:
                     estado = captura()
                 else:

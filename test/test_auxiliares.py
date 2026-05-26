@@ -7,44 +7,59 @@ import hashlib
 import hmac
 import json
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
 import keyring.errors as keyring_errors
 import pytest
 
-from soyyo.auxiliares import (_cargar_y_verificar_almacen, chek_almacen, chek_firma, chek_integridad_json,
-                              chek_keyring, chek_pepper, guarda_json, obtener_pin, validar_pin, )
-from soyyo.constantes import FirmaInvalidaError, PepperNotFoundError
+from soyyo.auxiliares import (_cargar_y_verificar_almacen, chek_almacen, chek_keyring, comprobar_seguridad,
+                              guarda_json, obtener_pin, validar_pin)
+from soyyo.constantes import EstadoApp, FirmaInvalidaError, PepperNotFoundError
 
 
 @pytest.fixture
 def almacen_valido(tmp_path):
     """Crea un fichero de datos con firma válida"""
 
-    pin = bytearray(b'12345678')
-    salt = os.urandom(32)
-    pepper = os.urandom(32)
+    def _factory(minutos_bloqueo=0, num_bloqueos=0, firmar='SI', manipulado=False):
+        pin = bytearray(b'12345678')
+        salt = os.urandom(32)
+        pepper = os.urandom(32)
 
-    dk = hashlib.pbkdf2_hmac('sha256', bytes(pin) + pepper, salt, 500_000, dklen=64)
+        dk = hashlib.pbkdf2_hmac('sha256', bytes(pin) + pepper, salt, 500_000, dklen=64)
 
-    hash_64 = base64.b64encode(dk[:32]).decode('utf-8')
-    salt_64 = base64.b64encode(salt).decode('utf-8')
-    pepper_64 = base64.b64encode(pepper).decode('utf-8')
+        hash_64 = base64.b64encode(dk[:32]).decode('utf-8')
+        salt_64 = base64.b64encode(salt).decode('utf-8')
+        pepper_64 = base64.b64encode(pepper).decode('utf-8')
 
-    autorizacion = {'hash': hash_64, 'salt': salt_64}
-    datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'bloqueado_hasta': None,
-             'num_bloqueos': 0, 'totp': {}}
-    cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
-    firma = hmac.new(pepper, cadena_json, 'sha512').hexdigest()
+        autorizacion = {'hash': hash_64, 'salt': salt_64}
+        if minutos_bloqueo == 0:
+            momento = None
+        else:
+            momento = (datetime.now(timezone.utc) + timedelta(minutes=minutos_bloqueo)).isoformat()
+        datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 1, 'bloqueado_hasta': momento,
+                 'num_bloqueos': num_bloqueos, 'totp': {}}
+        cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
 
-    datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'bloqueado_hasta': None,
-             'num_bloqueos': 0, 'totp': {}, 'firma': firma}
-    fichero = tmp_path / 'datos.json'
-    with open(fichero, 'w', encoding='utf8') as fout:
-        json.dump(datos, fout, sort_keys=True, separators=(',', ':'))
+        if firmar == 'NO':
+            firma = None
+        elif firmar == 'fake':
+            firma = 'firma_fake'
+        else:
+            firma = hmac.new(pepper, cadena_json, 'sha512').hexdigest()
+        if manipulado:
+            num_bloqueos -= 1
+        datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 1, 'bloqueado_hasta': momento,
+                 'num_bloqueos': num_bloqueos, 'totp': {}, 'firma': firma}
+        fichero = tmp_path / 'datos.json'
+        with open(fichero, 'w', encoding='utf8') as fout:
+            json.dump(datos, fout, sort_keys=True, separators=(',', ':'))
 
-    return fichero, pepper_64
+        return fichero, pepper_64
+
+    return _factory
 
 
 def test_chek_keyring_devuelve_cadena_incorrecta():
@@ -83,153 +98,133 @@ def test_chek_almacen_no_existe(tmp_path):
     assert chek_almacen(fichero) is False
 
 
-def test_chek_pepper_no_hay_pepper():
-    with patch('soyyo.auxiliares.get_password', return_value=None):
-        assert chek_pepper() is False
-
-
-def test_chek_pepper_hay_pepper():
-    with patch('soyyo.auxiliares.get_password', return_value='datos'):
-        assert chek_pepper() is True
-
-
-def test_chek_integridad_json_existe_es_valido(almacen_valido):
-    """El fichero de datos no existe"""
-    fichero, pepper = almacen_valido
-    assert chek_integridad_json(fichero) is True
-
-
-def test_chek_integridad_json_no_existe(tmp_path):
-    """El fichero de datos no existe"""
-    fichero = tmp_path / 'datos.json'
-    with pytest.raises(FileNotFoundError):
-        chek_integridad_json(fichero)
-
-
-def test_chek_integridad_json_existe_es_corrupto(tmp_path):
-    """El fichero no es JSON válido"""
-    fichero = tmp_path / 'datos.json'
-    fichero.write_text('esto no es json', encoding='utf8')
-    assert chek_integridad_json(fichero) is False
-
-
-def test_chek_firma_OK(almacen_valido):
-    fichero, pepper = almacen_valido
+def test_comprobar_seguridad_OK(almacen_valido):
+    fichero, pepper = almacen_valido()
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
-        assert chek_firma(fichero) is True
+        assert comprobar_seguridad(fichero) == EstadoApp.INICIALIZACION_CORRECTA
 
 
-def test_no_hay_firma(almacen_valido):
-    fichero, pepper = almacen_valido
-    datos = json.loads(fichero.read_text(encoding='utf8'))
-    del datos['firma']
-    with open(fichero, 'w', encoding='utf8') as fout:
-        json.dump(datos, fout, sort_keys=True, separators=(',', ':'))
-    assert chek_firma(fichero) is False
-
-
-def test_chek_firma_manipulada(almacen_valido):
-    fichero, pepper = almacen_valido
-    datos = json.loads(fichero.read_text(encoding='utf8'))
-    datos['intentos'] = 99
-    with open(fichero, 'w', encoding='utf8') as fout:
-        json.dump(datos, fout, sort_keys=True, separators=(',', ':'))
+def test_comprobar_seguridad_no_hay_firma(almacen_valido):
+    fichero, pepper = almacen_valido(firmar='NO')
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
-        assert chek_firma(fichero) is False
+        assert comprobar_seguridad(fichero) == EstadoApp.FIRMA_INVALIDA
 
 
-def test_chek_firma_sin_pepper(almacen_valido):
-    fichero, pepper = almacen_valido
+def test_comprobar_seguridad_firma_invalida(almacen_valido):
+    fichero, pepper = almacen_valido(firmar='fake')
+    with patch('soyyo.auxiliares.get_password', return_value=pepper):
+        assert comprobar_seguridad(fichero) == EstadoApp.FIRMA_INVALIDA
+
+
+def test_comprobar_seguridad_no_hay_pepper(almacen_valido):
+    fichero, pepper = almacen_valido()
     with patch('soyyo.auxiliares.get_password', return_value=None):
-        with pytest.raises(TypeError):
-            chek_firma(fichero)
+        assert comprobar_seguridad(fichero) == EstadoApp.SIN_PEPPER
 
 
-def test_chek_firma_no_hay_fichero():
-    with pytest.raises(OSError):
-        chek_firma(Path('/no_existe'))
+def test_comprobar_seguridad_joson_corrupto(almacen_valido):
+    fichero, pepper = almacen_valido()
+    with patch('soyyo.auxiliares.json.load', side_effect=json.JSONDecodeError('msg', 'doc', 0)):
+        assert comprobar_seguridad(fichero) == EstadoApp.FICHERO_CORRUPTO
+
+
+def test_comprobar_seguridad_error_lectura_fichero():
+    assert comprobar_seguridad(Path('/noexiste')) == EstadoApp.FICHERO_CORRUPTO
 
 
 def test_obtener_pin_pin_valido_salto_de_linea():
     teclas = [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\n']
-    with patch('termios.tcgetattr', return_value=[]):
-        with patch('termios.tcsetattr'):
-            with patch('tty.setraw'):
-                with patch('sys.stdin.buffer.read', side_effect=teclas):
-                    with patch('sys.stdin.fileno', return_value=0):
-                        resultado = obtener_pin('PIN: ')
+    # @formatter:off
+    with (patch('termios.tcgetattr', return_value=[]),
+          patch('termios.tcsetattr'),
+          patch('tty.setraw'),
+          patch('sys.stdin.buffer.read', side_effect=teclas),
+          patch('sys.stdin.fileno', return_value=0)):
+        # @formatter:on
+        resultado = obtener_pin('PIN: ', False)
     assert resultado == bytearray(b'12345678')
 
 
 def test_obtener_pin_pin_valido_retorno_de_carro():
     teclas = [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\r']
-    with patch('termios.tcgetattr', return_value=[]):
-        with patch('termios.tcsetattr'):
-            with patch('tty.setraw'):
-                with patch('sys.stdin.buffer.read', side_effect=teclas):
-                    with patch('sys.stdin.fileno', return_value=0):
-                        resultado = obtener_pin('PIN: ')
+    # @formatter:off
+    with (patch('termios.tcgetattr', return_value=[]),
+          patch('termios.tcsetattr'),
+          patch('tty.setraw'),
+          patch('sys.stdin.buffer.read', side_effect=teclas),
+          patch('sys.stdin.fileno', return_value=0)):
+        # @formatter:on
+        resultado = obtener_pin('PIN: ', False)
     assert resultado == bytearray(b'12345678')
 
 
 def test_obtener_pin_pin_valido_backspace():
     teclas = [b'1', b'2', b'3', b'3', b'\x7f', b'4', b'5', b'6', b'7', b'8', b'\r']
-    with patch('termios.tcgetattr', return_value=[]):
-        with patch('termios.tcsetattr'):
-            with patch('tty.setraw'):
-                with patch('sys.stdin.buffer.read', side_effect=teclas):
-                    with patch('sys.stdin.fileno', return_value=0):
-                        resultado = obtener_pin('PIN: ')
+    # @formatter:off
+    with (patch('termios.tcgetattr', return_value=[]),
+          patch('termios.tcsetattr'),
+          patch('tty.setraw'),
+          patch('sys.stdin.buffer.read', side_effect=teclas),
+          patch('sys.stdin.fileno', return_value=0)):
+        # @formatter:on
+        resultado = obtener_pin('PIN: ', False)
     assert resultado == bytearray(b'12345678')
 
 
 def test_obtener_pin_pin_valido_backspace_inicio():
     teclas = [b'\x7f', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\r']
-    with patch('termios.tcgetattr', return_value=[]):
-        with patch('termios.tcsetattr'):
-            with patch('tty.setraw'):
-                with patch('sys.stdin.buffer.read', side_effect=teclas):
-                    with patch('sys.stdin.fileno', return_value=0):
-                        resultado = obtener_pin('PIN: ')
+    # @formatter:off
+    with (patch('termios.tcgetattr', return_value=[]),
+          patch('termios.tcsetattr'),
+          patch('tty.setraw'),
+          patch('sys.stdin.buffer.read', side_effect=teclas),
+          patch('sys.stdin.fileno', return_value=0)):
+        # @formatter:on
+        resultado = obtener_pin('PIN: ', False)
     assert resultado == bytearray(b'12345678')
 
 
 def test_obtener_pin_pin_valido_caracter_no_ascii():
     teclas = [b'\xc3', b'\xa9',  # primer byte de 'é' y segundo byte de 'é'
               b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\r']
-
-    with patch('termios.tcgetattr', return_value=[]):
-        with patch('termios.tcsetattr'):
-            with patch('tty.setraw'):
-                with patch('sys.stdin.buffer.read', side_effect=teclas):
-                    with patch('sys.stdin.fileno', return_value=0):
-                        resultado = obtener_pin('PIN: ')
+    # @formatter:off
+    with (patch('termios.tcgetattr', return_value=[]),
+          patch('termios.tcsetattr'),
+          patch('tty.setraw'),
+          patch('sys.stdin.buffer.read', side_effect=teclas),
+          patch('sys.stdin.fileno', return_value=0)):
+        # @formatter:on
+        resultado = obtener_pin('PIN: ', False)
     assert resultado == bytearray(b'12345678')
 
 
 def test_obtener_pin_pin_corto(capsys):
     teclas = [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'\r', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8',
               b'\r']
-    with patch('termios.tcgetattr', return_value=[]):
-        with patch('termios.tcsetattr'):
-            with patch('tty.setraw'):
-                with patch('sys.stdin.buffer.read', side_effect=teclas):
-                    with patch('sys.stdin.fileno', return_value=0):
-                        resultado = obtener_pin('PIN: ')
-                        captured = capsys.readouterr()
+    # @formatter:off
+    with (patch('termios.tcgetattr', return_value=[]),
+          patch('termios.tcsetattr'),
+          patch('tty.setraw'),
+          patch('sys.stdin.buffer.read', side_effect=teclas),
+          patch('sys.stdin.fileno', return_value=0)):
+        # @formatter:on
+        resultado = obtener_pin('PIN: ', False)
+        captured = capsys.readouterr()
     assert '\nEl PIN debe tener entre 8 y 20 cifras.\n' in captured.out
     assert resultado == bytearray(b'12345678')
 
 
 def test_obtener_pin_pin_vacio(capsys):
     teclas = [b'\r', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\r']
-    with patch('termios.tcgetattr', return_value=[]):
-        with patch('termios.tcsetattr'):
-            with patch('tty.setraw'):
-                with patch('sys.stdin.buffer.read', side_effect=teclas):
-                    with patch('sys.stdin.fileno', return_value=0):
-                        resultado = obtener_pin('PIN: ')
-                        captured = capsys.readouterr()
+    # @formatter:off
+    with (patch('termios.tcgetattr', return_value=[]),
+          patch('termios.tcsetattr'),
+          patch('tty.setraw'),
+          patch('sys.stdin.buffer.read', side_effect=teclas),
+          patch('sys.stdin.fileno', return_value=0)):
+        # @formatter:on
+        resultado = obtener_pin('PIN: ', False)
+        captured = capsys.readouterr()
     assert '\nEl PIN debe tener entre 8 y 20 cifras.\n' in captured.out
     assert resultado == bytearray(b'12345678')
 
@@ -238,67 +233,75 @@ def test_obtener_pin_pin_largo(capsys):
     teclas = [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'0', b'1', b'2', b'3', b'4', b'5', b'6',
               b'7', b'8', b'9', b'0', b'1', b'2', b'3', b'4', b'\r', b'1', b'2', b'3', b'4', b'5', b'6', b'7',
               b'8', b'\r']
-    with patch('termios.tcgetattr', return_value=[]):
-        with patch('termios.tcsetattr'):
-            with patch('tty.setraw'):
-                with patch('sys.stdin.buffer.read', side_effect=teclas):
-                    with patch('sys.stdin.fileno', return_value=0):
-                        resultado = obtener_pin('PIN: ')
-                        captured = capsys.readouterr()
+    # @formatter:off
+    with (patch('termios.tcgetattr', return_value=[]),
+          patch('termios.tcsetattr'),
+          patch('tty.setraw'),
+          patch('sys.stdin.buffer.read', side_effect=teclas),
+          patch('sys.stdin.fileno', return_value=0)):
+        # @formatter:on
+        resultado = obtener_pin('PIN: ', False)
+        captured = capsys.readouterr()
     assert '\nEl PIN debe tener entre 8 y 20 cifras.\n' in captured.out
     assert resultado == bytearray(b'12345678')
 
 
 def test_obtener_pin_keyboard_interrupt():
-    with patch('termios.tcgetattr', return_value=[]):
-        with patch('termios.tcsetattr'):
-            with patch('tty.setraw'):
-                with patch('sys.stdin.buffer.read', side_effect=KeyboardInterrupt):
-                    with patch('sys.stdin.fileno', return_value=0):
-                        with pytest.raises(KeyboardInterrupt):
-                            obtener_pin('')
+    # @formatter:off
+    with (patch('termios.tcgetattr', return_value=[]),
+          patch('termios.tcsetattr'),
+          patch('tty.setraw'),
+          patch('sys.stdin.buffer.read', side_effect=KeyboardInterrupt),
+          patch('sys.stdin.fileno', return_value=0)):
+        # @formatter:on
+        with pytest.raises(KeyboardInterrupt):
+            obtener_pin('PIN: ', False)
 
 
 def test_obtener_pin_keyboard_interrupt_caracter():
     teclas = [b'\x03']
-    with patch('termios.tcgetattr', return_value=[]):
-        with patch('termios.tcsetattr'):
-            with patch('tty.setraw'):
-                with patch('sys.stdin.buffer.read', side_effect=teclas):
-                    with patch('sys.stdin.fileno', return_value=0):
-                        with pytest.raises(KeyboardInterrupt):
-                            obtener_pin('')
+    # @formatter:off
+    with (patch('termios.tcgetattr', return_value=[]),
+          patch('termios.tcsetattr'),
+          patch('tty.setraw'),
+          patch('sys.stdin.buffer.read', side_effect=teclas),
+          patch('sys.stdin.fileno', return_value=0)):
+        # @formatter:on
+        with pytest.raises(KeyboardInterrupt):
+            obtener_pin('PIN: ', False)
 
 
 def test_caracter_invalido_genera_bell():
     teclas = [b'z', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\r']
-    with patch('termios.tcgetattr', return_value=[]):
-        with patch('termios.tcsetattr'):
-            with patch('tty.setraw'):
-                with patch('sys.stdin.buffer.read', side_effect=teclas):
-                    with patch('sys.stdin.fileno', return_value=0):
-                        with patch('sys.stdout.write') as mock_write:
-                            obtener_pin('PIN: ')
-                            llamadas = [args[0] for args, kwargs in mock_write.call_args_list]
-                            assert '\x07' in llamadas
+    # @formatter:off
+    with (patch('termios.tcgetattr', return_value=[]),
+          patch('termios.tcsetattr'),
+          patch('tty.setraw'),
+          patch('sys.stdin.buffer.read', side_effect=teclas),
+          patch('sys.stdin.fileno', return_value=0),
+          patch('sys.stdout.write') as mock_write):
+        # @formatter:on
+        obtener_pin('PIN: ', False)
+        llamadas = [args[0] for args, kwargs in mock_write.call_args_list]
+        assert '\x07' in llamadas
 
 
 def test_validar_pin(almacen_valido):
-    fichero, pepper = almacen_valido
+    fichero, pepper = almacen_valido()
     pin = bytearray(b'12345678')
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
         assert validar_pin(fichero, pin) is True
 
 
 def test_validar_pin_erroneo(almacen_valido):
-    fichero, pepper = almacen_valido
+    fichero, pepper = almacen_valido()
     pin = bytearray(b'123456789')
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
         assert validar_pin(fichero, pin) is False
 
 
 def test_validar_pin_sin_pepper(almacen_valido):
-    fichero, pepper = almacen_valido
+    fichero, pepper = almacen_valido()
     pin = bytearray(b'12345678')
     with patch('soyyo.auxiliares.get_password', return_value=None):
         with pytest.raises(PepperNotFoundError):
@@ -306,27 +309,27 @@ def test_validar_pin_sin_pepper(almacen_valido):
 
 
 def test_guarda_json(almacen_valido):
-    fichero, pepper = almacen_valido
+    fichero, pepper = almacen_valido()
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
         guarda_json(fichero, {})
 
 
 def test_guarda_json_sin_pepper(almacen_valido):
-    fichero, pepper = almacen_valido
+    fichero, pepper = almacen_valido()
     with patch('soyyo.auxiliares.get_password', return_value=None):
         with pytest.raises(PepperNotFoundError):
             guarda_json(fichero, {})
 
 
 def test_guarda_json_falla_escritura(almacen_valido):
-    fichero, pepper = almacen_valido
+    fichero, pepper = almacen_valido()
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
         with pytest.raises(OSError):
             guarda_json(Path('/noexiste'), {})
 
 
 def test__cargar_y_verificar_almacen(almacen_valido):
-    fichero, pepper = almacen_valido
+    fichero, pepper = almacen_valido()
     datos = json.loads(fichero.read_text(encoding='utf8'))
     del datos['firma']
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
@@ -334,39 +337,27 @@ def test__cargar_y_verificar_almacen(almacen_valido):
 
 
 def test__cargar_y_verificar_almacen_no_hay_firma(almacen_valido):
-    fichero, pepper = almacen_valido
-    datos = json.loads(fichero.read_text(encoding='utf8'))
-    del datos['firma']
-    with open(fichero, 'w', encoding='utf8') as fout:
-        json.dump(datos, fout, sort_keys=True, separators=(',', ':'))
+    fichero, pepper = almacen_valido(firmar='NO')
     with pytest.raises(FirmaInvalidaError):
         _cargar_y_verificar_almacen(fichero)
 
 
 def test__cargar_y_verificar_almacen_error_en_firma(almacen_valido):
-    fichero, pepper = almacen_valido
-    datos = json.loads(fichero.read_text(encoding='utf8'))
-    datos['firma'] = 'fake'
-    with open(fichero, 'w', encoding='utf8') as fout:
-        json.dump(datos, fout, sort_keys=True, separators=(',', ':'))
+    fichero, pepper = almacen_valido(firmar='fake')
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
         with pytest.raises(FirmaInvalidaError):
             _cargar_y_verificar_almacen(fichero)
 
 
 def test__cargar_y_verificar_almacen_firma_manipulada(almacen_valido):
-    fichero, pepper = almacen_valido
-    datos = json.loads(fichero.read_text(encoding='utf8'))
-    datos['intentos'] = 99
-    with open(fichero, 'w', encoding='utf8') as fout:
-        json.dump(datos, fout, sort_keys=True, separators=(',', ':'))
+    fichero, pepper = almacen_valido(manipulado=True)
     with patch('soyyo.auxiliares.get_password', return_value=pepper):
         with pytest.raises(FirmaInvalidaError):
             _cargar_y_verificar_almacen(fichero)
 
 
 def test__cargar_y_verificar_almacen_firma_sin_pepper(almacen_valido):
-    fichero, pepper = almacen_valido
+    fichero, pepper = almacen_valido()
     with patch('soyyo.auxiliares.get_password', return_value=None):
         with pytest.raises(PepperNotFoundError):
             _cargar_y_verificar_almacen(fichero)
