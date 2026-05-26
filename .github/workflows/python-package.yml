@@ -52,3 +52,4 @@ jobs:
         pytest
       env:
         QT_QPA_PLATFORM: offscreen
+    	PYTHON_KEYRING_BACKEND: keyring.backends.null.Keyring
