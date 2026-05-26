@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any
 
-from constantes import EstadoApp
+from soyyo.constantes import EstadoApp
 
 
 def chek_keyring() -> bool: ...
