@@ -32,6 +32,11 @@ MSG_SALIENDO_ERROR = """
     La aplicación finaliza debido a un error.
     """
 
+MSG_ERROR_NO_CONTROLADO = """
+    Ha ocurrido un error no controlado en la aplicación.
+    Consulte a su proveedor.
+    """
+
 ###### Mensajes de la opción reset
 
 MSG_PROMPT_RESET = """

@@ -17,10 +17,9 @@ class EstadoApp(Enum):
     SIN_PEPPER = 'Sin pepper'  # No hay pepper en el keyring
     FICHERO_CORRUPTO = 'Fichero corrupto'  # JSON inválido o ilegible
     FIRMA_INVALIDA = 'Firma invalida'  # El fichero ha sido manipulado
-    INICIALIZACION_CORRECTA = 'Porgrama iniciado correctamente (no autorizado)'
+    INICIALIZACION_CORRECTA = 'Programa iniciado correctamente'
     SALIENDO_OK = 'Saliendo OK'  # El programa termina normalmente
     SALIENDO_ERROR = 'Saliendo con error'  # El porgrama termina en error
-    AUTORIZADO = 'PIN comprobado, progrma listo para funcionar'  # Programa operativo
 
     def __str__(self):
         return self.value

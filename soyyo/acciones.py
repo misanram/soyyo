@@ -5,27 +5,31 @@ Acciones que reliza el programa
 
 import base64
 import hashlib
+import hmac
+import json
 import logging
 import os
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+import uuid
+from datetime import datetime, timezone
+from urllib.parse import parse_qs, unquote, urlsplit
 
 import keyring.errors as keyring_errors
-import pyotp
-from keyring import delete_password, set_password
+from cryptography.fernet import Fernet
+from keyring import delete_password, get_password, set_password
 from PIL import ImageGrab
 from PySide6.QtCore import QRect, QSize, Qt
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 from pyzbar.pyzbar import decode
 
-from soyyo.auxiliares import _cargar_y_verificar_almacen, guarda_json, obtener_pin, validar_pin
+from soyyo.auxiliares import (autorizame, check_almacen, check_keyring, guardar_json, obtener_pin)
 from soyyo.constantes import (CURSORES, EstadoApp, FirmaInvalidaError, PepperNotFoundError,
-                              TIEMPO_DE_BLOQUEO, Zona, )
+                              Zona, )
 from soyyo.mensajes import (MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA, MSG_ERROR_CAPTURA,
-                            MSG_ERROR_DECODIFICA, MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS,
-                            MSG_FIRMA_INVALIDA, MSG_PROMPT_RESET, MSG_RESET_REALIZADO, MSG_SETUP,
+                            MSG_ERROR_DECODIFICA, MSG_FICHERO_CORRUPTO, MSG_PROMPT_RESET, MSG_RESET_REALIZADO,
+                            MSG_SETUP,
                             MSG_SIN_PEPPER, )
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
@@ -218,6 +222,89 @@ class VentanaCaptura(QWidget):
         painter.drawRect(QRect(0, 40, self.width() - 1, self.height() - 41))
 
 
+def comprobar_estado(data_path):
+    """
+       Determina el estado inicial del sistema mediante comprobaciones secuenciales.
+       El orden es estricto: cada comprobación asume que las anteriores han pasado.
+
+       Secuencia:
+           1. Keyring del sistema operativo (requisito de plataforma)
+           2. Existencia del almacén (distingue primer arranque de ejecución normal)
+           3. Luego hace una comprobación de seguridad, comprobando atómicamente almacén, pepper y firma:
+                Comprueba que exista almacen, pepper y firma.
+                Que todo sea legible y correcto.
+                Que la firma abra el almacén.
+                Que la aplicación no esté bloqueada temporalemente
+                Que la aplicación no esté bloqueada permanentemente
+
+       Devuelve un estado, uno de los siguientes valores:
+           - INICIALIZACION_CORRECTA → todo en orden
+           - PRIMER_ARRANQUE → no hay almacén (primera ejecución o datos perdidos)
+           - SIN_KEYRING → el SO no tiene keyring; el programa no puede funcionar
+           - SIN_PEPPER → almacén presente, pero pepper ausente; datos irrecuperables
+           - FICHERO_CORRUPTO → JSON inválido o error de lectura
+           - FIRMA_INVALIDA → JSON válido, pero la firma no coincide
+           - SALIENDO_OK - No hay errores, pero el programa sufre un bloque temporal o permamente
+           - INICIALIZACION_CORRECTA - si el programa puede funcionar.
+
+
+       Notas:
+           PRIMER_ARRANQUE cubre dos casos: 1) primera ejecución de la app y 2) pérdida accidental
+           del almacén. La interfaz debe informar al usuario de esta ambigüedad.
+           SALIENDO_OK cubre dos casos: Bloqueo permanete y bloqueo temporal. El programa está en
+           condiciones de funcionar, operar hay un bloqueo por eerrores al ingresar el PIN. Se informa al
+           usuario de la situación y sale sin generar errores.
+       """
+    try:
+        if not check_keyring():
+            return EstadoApp.SIN_KEYRING
+        elif not check_almacen(data_path):
+            return EstadoApp.PRIMER_ARRANQUE
+
+        with open(data_path, 'r', encoding='utf8') as fin:
+            datos = json.load(fin)
+            firma = datos.pop('firma', None)
+            if firma is None:
+                raise FirmaInvalidaError
+        cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
+        pepper = get_password('soyyo', 'pepper')
+        if pepper:
+            pepper64 = base64.b64decode(pepper)
+            nueva_firma = hmac.new(pepper64, cadena_json, 'sha512').hexdigest()
+            if hmac.compare_digest(firma, nueva_firma):
+                num_bloqueos = datos['num_bloqueos']
+                if datos['bloqueado_hasta']:
+                    bloqueado_hasta = datetime.fromisoformat(datos['bloqueado_hasta'])
+                    if datetime.now(timezone.utc) < bloqueado_hasta:
+                        log.info('Aplicación bloqueada temporalmente.')
+                        print(MSG_ERROR_APP_BLOQUEADA_TEMPORAL % bloqueado_hasta.astimezone().strftime('%c'))
+                        return EstadoApp.SALIENDO_OK
+                if num_bloqueos >= 10:
+                    log.info('Aplicación bloqueada permanentemente.')
+                    print(MSG_ERROR_APP_BLOQUEDA)
+                    return EstadoApp.SALIENDO_OK
+                return EstadoApp.INICIALIZACION_CORRECTA
+            else:
+                raise FirmaInvalidaError
+        else:
+            raise PepperNotFoundError
+    except FirmaInvalidaError:
+        log.exception('No hay firma en el archivo o esta es inválida.')
+        return EstadoApp.FIRMA_INVALIDA
+    except PepperNotFoundError:
+        log.exception(PepperNotFoundError.__doc__)
+        return EstadoApp.SIN_PEPPER
+    except json.JSONDecodeError:
+        log.exception('Error al abrir el archivo JSON.')
+        return EstadoApp.FICHERO_CORRUPTO
+    except OSError:
+        log.exception("Fallo al abrir '%s'", data_path)
+        return EstadoApp.FICHERO_CORRUPTO
+    except Exception:
+        log.exception('Error indeterminado en el proceso de comprobar_estado.')
+        raise
+
+
 def reset(data_path):
     """
     Elimina (si existen) el almacen de datos y la clave pepper del keyring
@@ -255,53 +342,53 @@ def setup(data_path):
     Pide el PIN y lo guarda en el keyring.
     """
 
-    while True:
-        if sys.stdout.isatty():
-            print('\033[2J\033[H', end='')  # pragma: no cover
-
-        print(MSG_SETUP)
-        preguntas = ['PIN', 'Repita el PIN']
-
-        try:
-            pines = [obtener_pin(arg, False) for arg in preguntas]
-            print('\r')
-        except KeyboardInterrupt:
-            return EstadoApp.SALIENDO_OK
-
-        if pines[0] != pines[1]:
-            print('\nAmbos valores deben ser iguales.\n\n')
-            time.sleep(1)
-            continue
-        break
-
-    pin = pines.pop()
-    pines.clear()
-    salt = os.urandom(32)
-    pepper = os.urandom(32)
-
-    dk = hashlib.pbkdf2_hmac('sha256', bytes(pin) + pepper, salt, 500_000, dklen=64)
-
-    for i in range(len(pin)):
-        pin[i] = 0
-    del pin
-
-    hash_64 = base64.b64encode(dk[:32]).decode('utf-8')
-    salt_64 = base64.b64encode(salt).decode('utf-8')
-    pepper_64 = base64.b64encode(pepper).decode('utf-8')
-
-    autorizacion = {'hash': hash_64, 'salt': salt_64}
-    totp = {}
-    datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'bloqueado_hasta': None,
-             'num_bloqueos': 0, 'totp': totp}
     try:
+        while True:
+            if sys.stdout.isatty():
+                print('\033[2J\033[H', end='')  # pragma: no cover
+
+            print(MSG_SETUP)
+            preguntas = ['PIN', 'Repita el PIN']
+
+            try:
+                pines = [obtener_pin(arg, False) for arg in preguntas]
+                print('\r')
+            except KeyboardInterrupt:
+                return EstadoApp.SALIENDO_OK
+
+            if pines[0] != pines[1]:
+                print('\nAmbos valores deben ser iguales.\n\n')
+                time.sleep(1)
+                continue
+            break
+
+        pin = pines.pop()
+        pines.clear()
+        salt = os.urandom(32)
+        pepper = os.urandom(32)
+
+        dk = hashlib.pbkdf2_hmac('sha256', bytes(pin) + pepper, salt, 500_000, dklen=64)
+
+        for i in range(len(pin)):
+            pin[i] = 0
+        del pin
+
+        hash_64 = base64.b64encode(dk[:32]).decode('utf-8')
+        salt_64 = base64.b64encode(salt).decode('utf-8')
+        pepper_64 = base64.b64encode(pepper).decode('utf-8')
+
+        autorizacion = {'hash': hash_64, 'salt': salt_64}
+        totp = {}
+        datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'bloqueado_hasta': None,
+                 'num_bloqueos': 0, 'totp': totp}
         set_password('soyyo', 'pepper', pepper_64)
+        guardar_json(data_path, datos)  # guardar_json no devuelve nada, guarda datos o levanta una excepción.
+        return EstadoApp.SALIENDO_OK
+
     except keyring_errors.PasswordSetError as error:
         log.exception('Error al guardar el pepper en el keyring,')
         print(error)
         return EstadoApp.SALIENDO_ERROR
-    try:
-        guarda_json(data_path, datos)  # guarda_json no devuelve nada, guarda datos o levanta una excepción.
-        return EstadoApp.INICIALIZACION_CORRECTA
     except OSError as error:
         log.exception('Error al escribir archivo %s', data_path)
         print(error)
@@ -311,93 +398,86 @@ def setup(data_path):
             log.exception('Error al eliminar el pepper del keyring')
             print(sobreerror)
         return EstadoApp.SALIENDO_ERROR
+    except Exception:
+        log.exception('Error indeterminado en el proceso de setup.')
+        raise
 
 
-def captura():
+def captura(data_path):
     """
     Captura el QR de un secreto TOTP
     """
 
-    app = QApplication(sys.argv)
-    print(dir(app))
-    ventana = VentanaCaptura(300, 300)
-    ventana.show()
-    app.exec()
-
-    if ventana.imagen:
-        decodificada = decode(ventana.imagen)
-        if decodificada:
-            log.debug('QR decodificado')
-            totp = pyotp.parse_uri(decodificada[0].data)
-            print(f'{totp.issuer}:{totp.name}')
-            print(decodificada[0].data)
-        else:
-            print(MSG_ERROR_DECODIFICA)
-            return EstadoApp.SALIENDO_ERROR
-    else:
-        print(MSG_ERROR_CAPTURA)
-        return EstadoApp.SALIENDO_ERROR
-
-    return EstadoApp.SALIENDO_OK
-
-
-def autorizar(data_path):
-    """
-    Se solicita el PIN y se comprueba, si es correccto se devuelve EstadoApp.AUTORIZADO,
-    en caso contrario se gestiona el bloqueo actualizando el fichero json con el número de intentos y en
-    caso necesario con el tiempo de bloqueo y el contador de bloqueos.
-    """
-
-    if sys.stdout.isatty():
-        print('\033[2J\033[H', end='')  # pragma: no cover
-
     try:
-        datos = _cargar_y_verificar_almacen(data_path)
-        intento = datos['intentos']
-        num_bloqueos = datos['num_bloqueos']
-        if datos['bloqueado_hasta']:
-            bloqueado_hasta = datetime.fromisoformat(datos['bloqueado_hasta'])
-            if datetime.now(timezone.utc) < bloqueado_hasta:
-                print(MSG_ERROR_APP_BLOQUEADA_TEMPORAL % bloqueado_hasta.astimezone().isoformat())
-                return EstadoApp.SALIENDO_OK
-        if num_bloqueos >= 10:
-            log.info('Aplicación bloqueada')
-            print(MSG_ERROR_APP_BLOQUEDA)
-            return EstadoApp.SALIENDO_OK
+        app = QApplication(sys.argv)
+        ventana = VentanaCaptura(300, 300)
+        ventana.show()
+        app.exec()
 
-        while intento <= 3:
-            try:
-                pin = obtener_pin('Introduzca el PIN', login=True)
-                print('\r')
-            except KeyboardInterrupt:
-                return EstadoApp.SALIENDO_OK
+        # datos[0] es el almacen JSON transformado en diccionario (dict[str, str])
+        # datos[1] es el PIN (bytes)
+        autoriza, datos, estado = autorizame(data_path)
 
-            if validar_pin(data_path, pin):
-                log.info('PIN correcto')
-                datos.update(dict(intentos=0, num_bloqueos=0, bloqueado_hasta=None))
-                guarda_json(data_path, datos)
-                return EstadoApp.AUTORIZADO
+        if not autoriza:
+            # autorizame loguea los errores correctamente, no hace falta loguearlos de nuevo
+            # Devuelve el estado correcto
+            return estado
+
+        if ventana.imagen:
+            log.debug('imagen capturada')
+            decodificada = decode(ventana.imagen)
+            if decodificada:
+                log.debug('QR decodificado')
+                uri = urlsplit(decodificada[0].data)
+                label = unquote(uri.path.lstrip(b'/'))  # type: ignore
+                issuer, account = label.split(':', 1) if ':' in label else ('', label)
+                parametros: dict[bytes, list] = parse_qs(uri.query)  # type: ignore
+                totp = dict(uri=decodificada[0].data.decode(), issuer=issuer, account=account,
+                            nombre=parametros.get(b'issuer', [issuer.encode('utf8')])[0].decode(),
+                            secret=parametros.get(b'secret', [b''])[0].decode(),
+                            digits=int(parametros.get(b'digits', [6])[0]),
+                            period=int(parametros.get(b'period', [30])[0]),
+                            algoritmo=parametros.get(b'algorithm', ['SHA1'])[0])
+                # # Serializar
+                # totp_json = json.dumps(totp)
+                # # str -> bytes
+                # totp_bytes = totp_json.encode('utf-8')
+                # # Encriptar
+                # totp_encriptado = f.encrypt(totp_bytes)
+                # # bytes -> str
+                # totp_encriptado_str = totp_encriptado.decode('utf-8')
+                pepper64 = get_password('soyyo', 'pepper')
+                if pepper64:
+                    pepper = base64.b64decode(pepper64)
+                    salt = base64.b64decode(datos[0]['autorizacion']['salt'])
+                    dk = hashlib.pbkdf2_hmac('sha256', bytes(datos[1]) + pepper, salt, 500_000, dklen=64)
+                    # Para encriptar el dato debe ser bytes
+                    totp_encriptado = Fernet(base64.urlsafe_b64encode(dk[32:])).encrypt(
+                            json.dumps(totp).encode('utf-8'))
+                    # JSON solo admite str. Para introducir el totp_encriptado en un JSON hay que
+                    # transformarlo en str
+                    datos[0]['totp'].update({str(uuid.uuid4()): totp_encriptado.decode()})
+                    guardar_json(data_path, datos[0])
+                else:
+                    raise PepperNotFoundError
             else:
-                log.info('PIN erróneo, intento %s', intento)
-                intento += 1
-                datos.update(dict(intentos=intento))
-                guarda_json(data_path, datos)
-
-        num_bloqueos += 1
-        bloqueado_hasta = (
-                datetime.now(timezone.utc) + timedelta(minutes=TIEMPO_DE_BLOQUEO[num_bloqueos])).isoformat()
-        datos.update(dict(intentos=0, num_bloqueos=num_bloqueos, bloqueado_hasta=bloqueado_hasta))
-        guarda_json(data_path, datos)
+                log.warning('No se ha podido decodificar la imagen capturada.')
+                print(MSG_ERROR_DECODIFICA)
+                return EstadoApp.SALIENDO_ERROR
+        else:
+            log.warning('No se ha podido capturar una imagen.')
+            print(MSG_ERROR_CAPTURA)
+            return EstadoApp.SALIENDO_ERROR
         return EstadoApp.SALIENDO_OK
-    except FirmaInvalidaError:
-        log.exception(FirmaInvalidaError.__doc__)
-        print(MSG_FIRMA_INVALIDA)
-        return EstadoApp.FIRMA_INVALIDA
+
     except PepperNotFoundError:
         log.exception(PepperNotFoundError.__doc__)
         print(MSG_SIN_PEPPER)
-        return EstadoApp.SIN_PEPPER
-    except OSError as error:
-        log.exception("Fallo al abrir '%s': %s", data_path, error)
-        print(MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS)
-        return EstadoApp.FICHERO_CORRUPTO
+        return EstadoApp.SALIENDO_ERROR
+    except OSError:
+        log.exception('Error de escritura.')
+        print(MSG_FICHERO_CORRUPTO)
+        return EstadoApp.SALIENDO_ERROR
+    except Exception:
+        log.exception('Error indeterminado en el proceso de captura.')
+        raise

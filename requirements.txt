@@ -1,6 +1,5 @@
 cryptography
 keyring
 pillow
-pyotp
 pyzbar
 pyside6

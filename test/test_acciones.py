@@ -2,12 +2,9 @@
 Tests del módulo acciones.py
 """
 
-import base64
-import hashlib
-import hmac
 import json
-import os
-from datetime import datetime, timedelta, timezone
+import locale
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -17,8 +14,11 @@ from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, Qt
 from PySide6.QtGui import QMouseEvent, QPaintEvent
 from PySide6.QtWidgets import QApplication
 
-from soyyo.acciones import autorizar, captura, reset, setup, VentanaCaptura
+from soyyo.acciones import captura, comprobar_estado, reset, setup, VentanaCaptura
 from soyyo.constantes import CURSORES, EstadoApp, Zona
+from .fixtures import almacen_valido
+
+locale.setlocale(locale.LC_ALL, '')
 
 ESTIRAR = 'estirar'
 MAXIMO = 'maximo'
@@ -30,40 +30,149 @@ DERECHA = 'derecha'
 IZQUIERDA = 'izquierda'
 
 
-@pytest.fixture
-def almacen_valido(tmp_path):
-    """Crea un fichero de datos con firma válida"""
+def test_comprobar_estado_llama_a_check_keyring(tmp_path):
+    fichero = tmp_path / 'datos.json'
+    with patch('soyyo.acciones.check_keyring', return_value=False) as mock_comprobar:
+        comprobar_estado(fichero)
+        mock_comprobar.assert_called_with()
 
-    def _factory(minutos_bloqueo=0, num_bloqueos=0):
-        pin = bytearray(b'12345678')
-        salt = os.urandom(32)
-        pepper = os.urandom(32)
 
-        dk = hashlib.pbkdf2_hmac('sha256', bytes(pin) + pepper, salt, 500_000, dklen=64)
+def test_comprobar_estado_llama_a_check_almacen(tmp_path):
+    fichero = tmp_path / 'datos.json'
+    # @formatter:off
+    with (patch('soyyo.acciones.check_keyring', return_value=True),
+          patch('soyyo.acciones.check_almacen', return_value=False) as mock_comprobar):
+        # @formatter:on
+        comprobar_estado(fichero)
+        mock_comprobar.assert_called_with(fichero)
 
-        hash_64 = base64.b64encode(dk[:32]).decode('utf-8')
-        salt_64 = base64.b64encode(salt).decode('utf-8')
-        pepper_64 = base64.b64encode(pepper).decode('utf-8')
 
-        autorizacion = {'hash': hash_64, 'salt': salt_64}
-        if minutos_bloqueo == 0:
-            momento = None
-        else:
-            momento = (datetime.now(timezone.utc) + timedelta(minutes=minutos_bloqueo)).isoformat()
-        datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 1, 'bloqueado_hasta': momento,
-                 'num_bloqueos': num_bloqueos, 'totp': {}}
-        cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
-        firma = hmac.new(pepper, cadena_json, 'sha512').hexdigest()
+def test_comprobar_estado_todo_ok(almacen_valido):
+    fichero, pepper = almacen_valido()
+    # @formatter:off
+    with (patch('soyyo.acciones.check_keyring', return_value=True),
+          patch('soyyo.acciones.check_almacen', return_value=True),
+          patch('soyyo.acciones.get_password', return_value=pepper)):
+        # @formatter:on
+        respuesta = comprobar_estado(fichero)
+    assert respuesta == EstadoApp.INICIALIZACION_CORRECTA
 
-        datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 1, 'bloqueado_hasta': momento,
-                 'num_bloqueos': num_bloqueos, 'totp': {}, 'firma': firma}
-        fichero = tmp_path / 'datos.json'
-        with open(fichero, 'w', encoding='utf8') as fout:
-            json.dump(datos, fout, sort_keys=True, separators=(',', ':'))
 
-        return fichero, pepper_64
+def test_comprobar_estado_sin_firma(almacen_valido):
+    fichero, pepper = almacen_valido(firmar='NO')
+    # @formatter:off
+    with (patch('soyyo.acciones.check_keyring', return_value=True),
+          patch('soyyo.acciones.check_almacen', return_value=True),
+          patch('soyyo.acciones.get_password', return_value=pepper)):
+        # @formatter:on
+        respuesta = comprobar_estado(fichero)
+    assert respuesta == EstadoApp.FIRMA_INVALIDA
 
-    return _factory
+
+def test_comprobar_estado_firma_mala(almacen_valido):
+    fichero, pepper = almacen_valido(firmar='fake')
+    # @formatter:off
+    with (patch('soyyo.acciones.check_keyring', return_value=True),
+          patch('soyyo.acciones.check_almacen', return_value=True),
+          patch('soyyo.acciones.get_password', return_value=pepper)):
+        # @formatter:on
+        respuesta = comprobar_estado(fichero)
+    assert respuesta == EstadoApp.FIRMA_INVALIDA
+
+
+def test_comprobar_estado_bloqueo_temporal(almacen_valido, caplog):
+    fichero, pepper = almacen_valido(minutos_bloqueo=10000)
+    # @formatter:off
+    with (patch('soyyo.acciones.check_keyring', return_value=True),
+          patch('soyyo.acciones.check_almacen', return_value=True),
+          patch('soyyo.acciones.get_password', return_value=pepper),
+          caplog.at_level(logging.INFO)):
+        # @formatter:on
+        resultado = comprobar_estado(fichero)
+    assert resultado == EstadoApp.SALIENDO_OK
+    mensajes = [r.message for r in caplog.records]
+    assert len(mensajes) == 1
+    assert 'Aplicación bloqueada temporalmente.' in mensajes[0]
+
+
+def test_comprobar_estado_bloqueo_temporal_solucionado(almacen_valido):
+    fichero, pepper = almacen_valido(minutos_bloqueo=-10000)
+    # @formatter:off
+    with (patch('soyyo.acciones.check_keyring', return_value=True),
+          patch('soyyo.acciones.check_almacen', return_value=True),
+          patch('soyyo.acciones.get_password', return_value=pepper)):
+        # @formatter:on
+        resultado = comprobar_estado(fichero)
+    assert resultado == EstadoApp.INICIALIZACION_CORRECTA
+
+
+def test_comprobar_estado_bloqueo_permanente(almacen_valido, caplog):
+    fichero, pepper = almacen_valido(num_bloqueos=10)
+    # @formatter:off
+    with (patch('soyyo.acciones.check_keyring', return_value=True),
+          patch('soyyo.acciones.check_almacen', return_value=True),
+          patch('soyyo.acciones.get_password', return_value=pepper),
+          caplog.at_level(logging.INFO)):
+        # @formatter:on
+        resultado = comprobar_estado(fichero)
+    assert resultado == EstadoApp.SALIENDO_OK
+    mensajes = [r.message for r in caplog.records]
+    assert len(mensajes) == 1
+    assert 'Aplicación bloqueada permanentemente.' in mensajes[0]
+
+
+def test_comprobar_estado_sin_pepper(almacen_valido):
+    fichero, pepper = almacen_valido()
+    # @formatter:off
+    with (patch('soyyo.acciones.check_keyring', return_value=True),
+          patch('soyyo.acciones.check_almacen', return_value=True),
+          patch('soyyo.acciones.get_password', return_value=None)):
+        # @formatter:on
+        resultado = comprobar_estado(fichero)
+    assert resultado == EstadoApp.SIN_PEPPER
+
+
+def test_comprobar_estado_error_JSON(almacen_valido, caplog):
+    fichero, pepper = almacen_valido()
+    # @formatter:off
+    with (patch('soyyo.acciones.check_keyring', return_value=True),
+          patch('soyyo.acciones.check_almacen', return_value=True),
+          patch('soyyo.acciones.get_password', return_value=pepper),
+          patch('soyyo.auxiliares.json.load', side_effect=json.JSONDecodeError('msg', 'doc', 0)),
+          caplog.at_level(logging.ERROR),):
+        # @formatter:on
+        resultado = comprobar_estado(fichero)
+        mensajes = [r.message for r in caplog.records]
+        assert len(mensajes) == 1
+        assert 'Error al abrir el archivo JSON.' in mensajes[0]
+    assert resultado == EstadoApp.FICHERO_CORRUPTO
+
+
+def test_comprobar_estado_error_lectura_fichero(caplog):
+    # @formatter:off
+    with (patch('soyyo.acciones.check_keyring', return_value=True),
+          patch('soyyo.acciones.check_almacen', return_value=True),
+          patch('soyyo.acciones.check_almacen', return_value=True),
+          caplog.at_level(logging.ERROR)):
+        # @formatter:on
+        resultado = comprobar_estado(Path('/noexiste'))
+        mensajes = [r.message for r in caplog.records]
+        assert len(mensajes) == 1
+        assert 'Fallo al abrir ' in mensajes[0]
+    assert resultado == EstadoApp.FICHERO_CORRUPTO
+
+
+def test_comprobar_estado_error_inesperado(almacen_valido, caplog):
+    fichero, pepper = almacen_valido()
+    # @formatter:off
+    with (patch('soyyo.acciones.check_keyring', side_effect=Exception),
+          caplog.at_level(logging.ERROR)):
+        # @formatter:on
+        with pytest.raises(Exception):
+            comprobar_estado(fichero)
+        mensajes = [r.message for r in caplog.records]
+        assert len(mensajes) == 1
+        assert 'Error indeterminado en el proceso de comprobar_estado.' in mensajes[0]
 
 
 def test_reset_keyboard_interrupt(tmp_path, capsys):
@@ -121,7 +230,7 @@ def test_setup_sin_error(tmp_path):
     with (patch('soyyo.acciones.set_password', side_effect=_fake_set_password),
           patch('soyyo.auxiliares.get_password', side_effect=_fake_get_password),
           patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678'))):
-        assert setup(fichero) == EstadoApp.INICIALIZACION_CORRECTA
+        assert setup(fichero) == EstadoApp.SALIENDO_OK
 
 
 def test_setup_keyboard_interrupt(tmp_path, capsys):
@@ -164,7 +273,7 @@ def test_setup_set_keyring_error(tmp_path):
 def test_setup_file_write_error(tmp_path):
     fichero = tmp_path / 'datos.json'
     # @formatter:off
-    with (patch('soyyo.acciones.guarda_json', side_effect=OSError),
+    with (patch('soyyo.acciones.guardar_json', side_effect=OSError),
           patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678'))):
         # @formatter:on
         assert setup(fichero) == EstadoApp.SALIENDO_ERROR
@@ -181,13 +290,26 @@ def test_setup_delete_password_keyring_error(tmp_path):
         return pepper_almacenado.get((servicio, usuario))
 
     # @formatter:off
-    with (patch('soyyo.acciones.guarda_json', side_effect=OSError),
+    with (patch('soyyo.acciones.guardar_json', side_effect=OSError),
           patch('soyyo.acciones.set_password', side_effect=_fake_set_password),
           patch('soyyo.auxiliares.get_password', side_effect=_fake_get_password),
           patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678')),
           patch('soyyo.acciones.delete_password', side_effect=keyring_errors.PasswordDeleteError)):
         # @formatter:on
         assert setup(fichero) == EstadoApp.SALIENDO_ERROR
+
+
+def test_setup_error_inesperado(almacen_valido, caplog):
+    fichero, pepper = almacen_valido()
+    # @formatter:off
+    with (patch('soyyo.acciones.obtener_pin', side_effect=Exception),
+          caplog.at_level(logging.ERROR)):
+        # @formatter:on
+        with pytest.raises(Exception):
+            setup(fichero)
+        mensajes = [r.message for r in caplog.records]
+        assert len(mensajes) == 1
+        assert 'Error indeterminado en el proceso de setup.' in mensajes[0]
 
 
 def test_ventana_captura_inicial(qtbot):
@@ -455,144 +577,109 @@ def test_ventana_captura_paint_event(qtbot):
     ventana.paintEvent(event)  # no lanza excepción
 
 
-def test_captura():
-    with patch('soyyo.acciones.QApplication'):
-        with patch('soyyo.acciones.VentanaCaptura') as mock_ventana:
-            mock_ventana.return_value.imagen = None
-            resultado = captura()
-    assert resultado == EstadoApp.SALIENDO_ERROR
+def test_captura_funciona_bien(almacen_valido):
+    fichero, pepper = almacen_valido()
+    # @formatter:off
+    with patch('soyyo.acciones.VentanaCaptura') as mock_ventana:
+        mock_ventana.return_value.imagen = MagicMock()
+        mock_decoded = MagicMock()
+        mock_decoded.data = b'otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP'
+        with (patch('soyyo.acciones.QApplication'),
+              patch('soyyo.auxiliares.obtener_pin', return_value=bytearray(b'12345678')),
+              patch('soyyo.auxiliares.get_password', return_value=pepper),
+              patch('soyyo.acciones.get_password', return_value=pepper),
+              patch('soyyo.acciones.decode', return_value=[mock_decoded]),):
+            # @formatter:on
+            resultado = captura(fichero)
+    assert resultado == EstadoApp.SALIENDO_OK
 
 
-def test_captura_sin_qr():
-    with patch('soyyo.acciones.QApplication'):
-        with patch('soyyo.acciones.VentanaCaptura') as mock_ventana:
-            mock_ventana.return_value.imagen = 'imagen_falsa'
-            with patch('soyyo.acciones.decode', return_value=[]):
-                resultado = captura()
-    assert resultado == EstadoApp.SALIENDO_ERROR
-
-
-def test_captura_ok():
-    mock_totp = MagicMock()
-    mock_totp.issuer = 'Google'
-    mock_totp.name = 'usuario@gmail.com'
-    mock_decoded = MagicMock()
-    mock_decoded.data = b'otpauth://totp/...'
+def test_captura_no_autoriza(tmp_path):
     # @formatter:off
     with (patch('soyyo.acciones.QApplication'),
           patch('soyyo.acciones.VentanaCaptura') as mock_ventana,
-          patch('soyyo.acciones.decode', return_value=[mock_decoded]),
-          patch('soyyo.acciones.pyotp.parse_uri', return_value=mock_totp),):
+          patch('soyyo.acciones.autorizame', return_value=(False, None, EstadoApp.SIN_PEPPER)),):
+        # @formatter:on
+        mock_ventana.return_value.imagen = None
+        fichero = tmp_path / 'datos.json'
+        resultado = captura(fichero)
+    assert resultado == EstadoApp.SIN_PEPPER
+
+
+def test_captura_sin_imagen(tmp_path):
+    # @formatter:off
+    with (patch('soyyo.acciones.QApplication'),
+          patch('soyyo.acciones.VentanaCaptura') as mock_ventana,
+          patch('soyyo.acciones.decode', return_value=[]),
+          patch('soyyo.acciones.autorizame', return_value=(True, None, None)),):
+        # @formatter:on
+        mock_ventana.return_value.imagen = None
+        fichero = tmp_path / 'datos.json'
+        resultado = captura(fichero)
+    assert resultado == EstadoApp.SALIENDO_ERROR
+
+
+def test_captura_imagen_sin_qr(tmp_path):
+    # @formatter:off
+    with (patch('soyyo.acciones.QApplication'),
+          patch('soyyo.acciones.VentanaCaptura') as mock_ventana,
+          patch('soyyo.acciones.decode', return_value=[]),
+          patch('soyyo.acciones.autorizame', return_value=(True, None, None)),):
         # @formatter:on
         mock_ventana.return_value.imagen = 'imagen_falsa'
-        resultado = captura()
-    assert resultado == EstadoApp.SALIENDO_OK
+        fichero = tmp_path / 'datos.json'
+        resultado = captura(fichero)
+    assert resultado == EstadoApp.SALIENDO_ERROR
 
 
-def test_autorizar_bloqueo_temporal(almacen_valido, capsys):
-    fichero, pepper = almacen_valido(minutos_bloqueo=10000)
-    with patch('soyyo.auxiliares.get_password', return_value=pepper):
-        resultado = autorizar(fichero)
-    assert resultado == EstadoApp.SALIENDO_OK
-
-
-def test_autorizar_bloqueo_temporal_finalizado(almacen_valido, capsys):
-    fichero, pepper = almacen_valido(minutos_bloqueo=-10000)
-    pin = bytearray(b'12345678')
-    # @formatter:off
-    with (patch('soyyo.acciones.obtener_pin', return_value=pin),
-          patch('soyyo.auxiliares.get_password', return_value=pepper)):
-        # @formatter:on
-        assert autorizar(fichero) == EstadoApp.AUTORIZADO
-
-
-def test_autorizar_bloqueo_permanente(almacen_valido, capsys):
-    fichero, pepper = almacen_valido(num_bloqueos=10)
-    with patch('soyyo.auxiliares.get_password', return_value=pepper):
-        resultado = autorizar(fichero)
-    assert resultado == EstadoApp.SALIENDO_OK
-
-
-def test_autorizar_ok(almacen_valido):
-    fichero, pepper = almacen_valido()
-    pin = bytearray(b'12345678')
-    with (patch('soyyo.acciones.obtener_pin', return_value=pin), patch('soyyo.auxiliares.get_password',
-                                                                       return_value=pepper)):
-        # @formatter:on
-        assert autorizar(fichero) == EstadoApp.AUTORIZADO
-
-
-@pytest.mark.parametrize('pin, respuesta',
-                         [(bytearray(b'1234567'), EstadoApp.SALIENDO_OK),
-                          (bytearray(b'12345678'), EstadoApp.AUTORIZADO), ])
-def test_autorizar_un_fallo(almacen_valido, pin, respuesta):
+def test_captura_sin_pepper(almacen_valido):
     fichero, pepper = almacen_valido()
     # @formatter:off
-    with (patch('soyyo.acciones.obtener_pin', return_value=pin),
-          patch('soyyo.auxiliares.get_password', return_value=pepper)):
-        # @formatter:on
-        assert respuesta == autorizar(fichero)
+    with patch('soyyo.acciones.VentanaCaptura') as mock_ventana:
+        mock_ventana.return_value.imagen = MagicMock()
+        mock_decoded = MagicMock()
+        mock_decoded.data = b'otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP'
+        with (patch('soyyo.acciones.QApplication'),
+              patch('soyyo.auxiliares.obtener_pin', return_value=bytearray(b'12345678')),
+              patch('soyyo.auxiliares.get_password', return_value=pepper),
+              patch('soyyo.acciones.get_password', return_value=None),
+              patch('soyyo.acciones.decode', return_value=[mock_decoded]),):
+            # @formatter:on
+            resultado = captura(fichero)
+    assert resultado == EstadoApp.SALIENDO_ERROR
 
 
-@pytest.mark.parametrize('pin, respuesta',
-                         [(bytearray(b'1234567'), EstadoApp.SALIENDO_OK),
-                          (bytearray(b'1234567'), EstadoApp.SALIENDO_OK),
-                          (bytearray(b'12345678'), EstadoApp.AUTORIZADO), ])
-def test_autorizar_dos_fallos(almacen_valido, pin, respuesta):
+def test_captura_error_escritura_fichero(almacen_valido, caplog):
     fichero, pepper = almacen_valido()
     # @formatter:off
-    with (patch('soyyo.acciones.obtener_pin', return_value=pin),
-          patch('soyyo.auxiliares.get_password', return_value=pepper)):
-        # @formatter:on
-        assert respuesta == autorizar(fichero)
+    with patch('soyyo.acciones.VentanaCaptura') as mock_ventana:
+        mock_ventana.return_value.imagen = MagicMock()
+        mock_decoded = MagicMock()
+        mock_decoded.data = b'otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP'
+        with (patch('soyyo.acciones.QApplication'),
+              patch('soyyo.auxiliares.obtener_pin', return_value=bytearray(b'12345678')),
+              patch('soyyo.auxiliares.get_password', return_value=pepper),
+              patch('soyyo.acciones.get_password', return_value=pepper),
+              patch('soyyo.acciones.decode', return_value=[mock_decoded]),
+              patch('soyyo.acciones.guardar_json', side_effect=OSError),
+              caplog.at_level(logging.ERROR)):
+            # @formatter:on
+            resultado = captura(fichero)
+    assert resultado == EstadoApp.SALIENDO_ERROR
+    mensajes = [r.message for r in caplog.records]
+    assert len(mensajes) == 1
+    assert 'Error de escritura.' in mensajes[0]
 
 
-def test_autorizar_tres_fallos(almacen_valido, caplog):
-    import logging
+def test_captura_error_inesperado(almacen_valido, caplog):
     fichero, pepper = almacen_valido()
     # @formatter:off
-    with (patch('soyyo.acciones.obtener_pin', return_value='0000'),
-          patch('soyyo.acciones.validar_pin', return_value=False),
-          patch('soyyo.auxiliares.get_password', return_value=pepper),
-          patch('soyyo.acciones.guarda_json'),
-          caplog.at_level(logging.INFO)):
+    with (patch('soyyo.acciones.QApplication', side_effect=Exception),
+          caplog.at_level(logging.ERROR)):
         # @formatter:on
-        resultado = autorizar(data_path=fichero)
-
-    # Verificar los tres intentos en el log
-    mensajes = [r.message for r in caplog.records if 'PIN erróneo' in r.message]
-    assert len(mensajes) == 3
-    assert 'intento 1' in mensajes[0]
-    assert 'intento 2' in mensajes[1]
-    assert 'intento 3' in mensajes[2]
-    assert resultado == EstadoApp.SALIENDO_OK
-
-
-def test_autorizar_KeyboardInterrupt(almacen_valido):
-    fichero, pepper = almacen_valido()
-    # @formatter:off
-    with (patch('soyyo.acciones.obtener_pin', side_effect=KeyboardInterrupt),
-          patch('soyyo.auxiliares.get_password', return_value=pepper)):
-        # @formatter:on
-        assert autorizar(fichero) == EstadoApp.SALIENDO_OK
-
-
-def test_autorizar_firma_invalida(almacen_valido):
-    fichero, pepper = almacen_valido()
-    pepper = base64.b64encode(b'fake_pepper').decode('utf-8')
-    with patch('soyyo.auxiliares.get_password', return_value=pepper):
-        assert autorizar(fichero) == EstadoApp.FIRMA_INVALIDA
-
-
-def test_autorizar_pepper_not_found(almacen_valido):
-    fichero, pepper = almacen_valido()
-    pepper = None
-    with patch('soyyo.auxiliares.get_password', return_value=pepper):
-        assert autorizar(fichero) == EstadoApp.SIN_PEPPER
-
-
-def test_autorizar_error_lectura_fichero_almacen(almacen_valido):
-    fichero, pepper = almacen_valido()
-    fichero = Path('/noexiste')
-    with patch('soyyo.auxiliares.get_password', return_value=pepper):
-        assert autorizar(fichero) == EstadoApp.FICHERO_CORRUPTO
+        with pytest.raises(Exception):
+            resultado = captura(fichero)
+            assert resultado == EstadoApp.SALIENDO_ERROR
+        mensajes = [r.message for r in caplog.records]
+        assert len(mensajes) == 1
+        assert 'Error indeterminado en el proceso de captura.' in mensajes[0]
