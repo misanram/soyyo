@@ -12,16 +12,48 @@ import termios
 import time
 import tty
 from datetime import datetime, timedelta, timezone
+from functools import wraps
+from string import digits
 
+import keyring
 import keyring.errors as keyring_errors
-from keyring import get_password, set_password
 
 from soyyo.constantes import EstadoApp, FirmaInvalidaError, PepperNotFoundError, TIEMPO_DE_BLOQUEO
-from soyyo.mensajes import (MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
-                            MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS, MSG_FIRMA_INVALIDA,
-                            MSG_SIN_PEPPER)
+from soyyo.mensajes import (MSG_CABECERA, MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
+                            MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS, MSG_FIRMA_INVALIDA, MSG_SIN_PEPPER)
 
 log = logging.getLogger(__name__)
+
+
+def reintentar_keyring(intentos=3, espera=0.2):
+    """
+    Decorador para reintentar los accesos al keyring que se "desconecta" de vez en cuendo.
+    El decorardor lo hizo en gran parte Claude Sonnet 4.6
+    """
+
+    def _decorador(func):
+        @wraps(func)
+        def _wrapper(*args, **kwargs):
+            for _ in range(intentos):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as error:
+                    if 'session' in str(error).lower() or 'InvalidObjectPath' in str(error):
+                        if _ < intentos - 1:
+                            time.sleep(espera)
+                        else:
+                            raise
+                    else:
+                        raise
+
+            return None  # pragma: no cover # satisface al IDE, nunca se alcanza
+
+        return _wrapper
+
+    return _decorador
+
+
+keyring.get_password = reintentar_keyring()(keyring.get_password)
 
 
 def check_keyring():
@@ -30,8 +62,8 @@ def check_keyring():
     """
 
     try:
-        set_password('test_service_name', 'test_username_', 'test_password')
-        dato = get_password('test_service_name', 'test_username_')
+        keyring.set_password('test_service_name', 'test_username_', 'test_password')
+        dato = keyring.get_password('test_service_name', 'test_username_')
         return dato == 'test_password'
     except keyring_errors.NoKeyringError as error:
         log.exception('No hay keyring instalado en el sistema.')
@@ -47,22 +79,23 @@ def check_almacen(data_path):
     return data_path.exists()
 
 
-def obtener_pin(prompt_head, login=False):
+def obtener_pin(prompt_head, setup=True):
     """
-    This function is designed to capture the parameters for app.
-    It captures input and validates the data obtained.
-    Steps:
-        Create a text string to use as a prompt.
-        Request the input.
-        Validate the received data.
-        Return the validated data or None.
-    Parameter capture can be interrupted with Ctrl+C
+    Esta función está diseñada àra capturar datatos para la app
+    Captura una entrada y la valida.
+    Pasos:
+        Crea una cadena de texto que usa como prompt
+        Pide los datos (byte a byte)
+        Valida el dato recibido
+        Devuelve el dato validado
+    La captura puede detenerse con Ctrl+C
 
-    Arguments
-        prompt_head (str): Start of the message to be displayed to the user.
+    Argumentos
+        prompt_head (str): El inicio del mensaje que verá el usuario.
+        setup (bool): True si es setup.
 
     Return
-        The data validated or KeyboardInterrupt
+        La entrada validada o KeyboardInterrupt
     """
 
     prompt = f'\n\r{prompt_head}: '
@@ -78,7 +111,7 @@ def obtener_pin(prompt_head, login=False):
                 sys.stdout.flush()
                 while True:
                     ch = sys.stdin.buffer.read(1)
-                    if ch[0] not in (3, 10, 13, 127) and (ch[0] < 48 or ch[0] > 57):
+                    if ch[0] not in (3, 10, 13, 127) and chr(ch[0]) not in digits:
                         sys.stdout.write('✗')
                         sys.stdout.flush()
                         time.sleep(0.1)
@@ -105,11 +138,13 @@ def obtener_pin(prompt_head, login=False):
         except KeyboardInterrupt:
             raise
 
-        if not login and not (8 <= len(data) <= 20):
+        if setup and not (8 <= len(data) <= 20):
             print('\nEl PIN debe tener entre 8 y 20 cifras.\n')
             time.sleep(1)
             continue
-
+        elif not setup and not (8 <= len(data) <= 20):
+            time.sleep(1)
+            continue
         return data
 
 
@@ -123,7 +158,7 @@ def validar_pin(data_path, pin):
             datos = json.load(fin)
             _hash = base64.b64decode(datos['autorizacion']['hash'])
             salt = base64.b64decode(datos['autorizacion']['salt'])
-        pepper64 = get_password('soyyo', 'pepper')
+        pepper64 = keyring.get_password('soyyo', 'pepper')
         if pepper64:
             pepper = base64.b64decode(pepper64)
             dk = hashlib.pbkdf2_hmac('sha256', bytes(pin) + pepper, salt, 500_000, dklen=64)
@@ -136,7 +171,7 @@ def validar_pin(data_path, pin):
         log.warning('Error decodificando fichero JSON.')
         raise
     except OSError as error:
-        log.warning("Fallo al abrir '%s': %s", data_path, error)
+        log.warning("Fallo al leer '%s': %s", data_path, error)
         raise
 
 
@@ -146,7 +181,7 @@ def guardar_json(data_path, datos):
     """
 
     try:
-        pepper = get_password('soyyo', 'pepper')
+        pepper = keyring.get_password('soyyo', 'pepper')
         datos.pop('firma', None)
         cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
         if pepper:
@@ -164,7 +199,7 @@ def guardar_json(data_path, datos):
         log.warning(PepperNotFoundError.__doc__)
         raise
     except OSError as error:
-        log.warning("Fallo al abrir '%s': %s", data_path, error)
+        log.warning("Fallo al escribir '%s': %s", data_path, error)
         raise
 
 
@@ -174,14 +209,14 @@ def cargar_y_verificar_almacen(data_path):
     """
 
     try:
-        with open(data_path, 'r', encoding='utf8') as fin:
+        with open(data_path, 'rb') as fin:
             datos = json.load(fin)
             firma = datos.pop('firma', None)
             if firma is None:
                 log.warning(FirmaInvalidaError.__doc__)
                 raise FirmaInvalidaError
         cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
-        pepper = get_password('soyyo', 'pepper')
+        pepper = keyring.get_password('soyyo', 'pepper')
         if pepper:
             pepper64 = base64.b64decode(pepper)
             nueva_firma = hmac.new(pepper64, cadena_json, 'sha512').hexdigest()
@@ -201,7 +236,7 @@ def cargar_y_verificar_almacen(data_path):
         log.warning(FirmaInvalidaError.__doc__)
         raise
     except OSError as error:
-        log.warning("Fallo al abrir '%s': %s", data_path, error)
+        log.warning("Fallo al leer '%s': %s", data_path, error)
         raise
 
 
@@ -215,7 +250,7 @@ def autorizame(data_path):
     """
 
     if sys.stdout.isatty():
-        print('\033[2J\033[H', end='')  # pragma: no cover
+        print('\033c', end='')  # pragma: no cover
 
     try:
         datos = cargar_y_verificar_almacen(data_path)
@@ -234,7 +269,8 @@ def autorizame(data_path):
 
         while intento <= 3:
             try:
-                pin = obtener_pin('Introduzca el PIN', login=True)
+                print(MSG_CABECERA)
+                pin = obtener_pin('Introduzca el PIN', setup=False)
                 print('\r')
             except KeyboardInterrupt:
                 log.info('Cancelado por el usuario.')
@@ -266,6 +302,6 @@ def autorizame(data_path):
         print(MSG_SIN_PEPPER)
         return False, None, EstadoApp.SIN_PEPPER
     except OSError as error:
-        log.exception("Fallo al abrir '%s': %s", data_path, error)
+        log.exception("Fallo al escribir '%s': %s", data_path, error)
         print(MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS)
         return False, None, EstadoApp.FICHERO_CORRUPTO

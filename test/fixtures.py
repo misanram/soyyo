@@ -16,7 +16,7 @@ import pytest
 def almacen_valido(tmp_path):
     """Crea un fichero de datos con firma válida"""
 
-    def _factory(minutos_bloqueo=0, num_bloqueos=0, firmar='SI', manipulado=False):
+    def _factory(minutos_bloqueo=0, num_bloqueos=0, firmar='SI', manipulado=False, totps=False):
         pin = bytearray(b'12345678')
         salt = os.urandom(32)
         pepper = os.urandom(32)
@@ -28,12 +28,15 @@ def almacen_valido(tmp_path):
         pepper_64 = base64.b64encode(pepper).decode('utf-8')
 
         autorizacion = {'hash': hash_64, 'salt': salt_64}
+        totp = {}
+        if totps:
+            totp = {'A': 'None', 'B': 'None', 'C': 'None', }
         if minutos_bloqueo == 0:
             momento = None
         else:
             momento = (datetime.now(timezone.utc) + timedelta(minutes=minutos_bloqueo)).isoformat()
         datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 1, 'bloqueado_hasta': momento,
-                 'num_bloqueos': num_bloqueos, 'totp': {}}
+                 'num_bloqueos': num_bloqueos, 'totp': totp}
         cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
 
         if firmar == 'NO':
@@ -45,7 +48,7 @@ def almacen_valido(tmp_path):
         if manipulado:
             num_bloqueos -= 1
         datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 1, 'bloqueado_hasta': momento,
-                 'num_bloqueos': num_bloqueos, 'totp': {}, 'firma': firma}
+                 'num_bloqueos': num_bloqueos, 'totp': totp, 'firma': firma}
         fichero = tmp_path / 'datos.json'
         with open(fichero, 'w', encoding='utf8') as fout:
             json.dump(datos, fout, sort_keys=True, separators=(',', ':'))

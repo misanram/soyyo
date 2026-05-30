@@ -9,15 +9,14 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from soyyo.acciones import captura, comprobar_estado, reset, setup
+from soyyo.acciones import captura, comprobar_estado, lista, reset, setup
 from soyyo.constantes import EstadoApp
 from soyyo.mensajes import (MSG_ERROR_NO_CONTROLADO, MSG_FICHERO_CORRUPTO, MSG_FIRMA_INVALIDA,
-                            MSG_SALIENDO_ERROR, MSG_SALIENDO_OK,
-                            MSG_SIN_KEYRING, MSG_SIN_PEPPER, )
+                            MSG_SALIENDO_ERROR, MSG_SALIENDO_OK, MSG_SIN_KEYRING, MSG_SIN_PEPPER, )
 
 locale.setlocale(locale.LC_ALL, '')
 log = logging.getLogger(__name__)
-file_handler = RotatingFileHandler('soyyo.log', maxBytes=1_000_000, backupCount=5)
+file_handler = RotatingFileHandler(Path(sys.prefix) / 'soyyo.log', maxBytes=1_000_000, backupCount=5)
 logging.basicConfig(level=logging.WARNING,
                     handlers=[file_handler],
                     force=True,
@@ -38,6 +37,7 @@ def get_options():
     grupo.add_argument('--test', action='store_true', help=argparse.SUPPRESS)  # para test con pytest
     grupo.add_argument('--reset', action='store_true', help='Reinicia el programa a su estado de fábrica.')
     grupo.add_argument('--captura', action='store_true', help='Captura un QR.')
+    grupo.add_argument('--lista', action='store_true', help='Lista los TOTP almacenados.')
     return parser
 
 
@@ -97,6 +97,8 @@ class Aplicacion:
                 elif estado == EstadoApp.INICIALIZACION_CORRECTA:
                     if self.args.captura:
                         estado = captura(self.data_path)
+                    elif self.args.lista:
+                        estado = lista(self.data_path)
                     else:
                         print(not all(vars(self.args).values()))
                         break

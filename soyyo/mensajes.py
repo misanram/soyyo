@@ -4,6 +4,11 @@ Mensajes que muestra el programa (esto puede que desaparezca o no...)
 
 ###### Mensajes genéricos y de arranque de la App
 
+MSG_CABECERA = """
+
+soyyo un programa para manejar tus TOTP.
+            """
+
 MSG_SIN_KEYRING = """
     No hay un sistema de almacenamiento seguro disponible en este sistema.
         La aplicación no puede continuar.
@@ -25,7 +30,7 @@ MSG_FIRMA_INVALIDA = """
         Probablemente deba resetar la aplicación."""
 
 MSG_SALIENDO_OK = """
-    Aplicación finalizada.
+    
     """
 
 MSG_SALIENDO_ERROR = """
@@ -88,4 +93,8 @@ MSG_ERROR_CAPTURA = """
 
 MSG_ERROR_DECODIFICA = """
     No se ha podido decodificar la imagen capturada.
+    """
+
+MSG_TOTP_CAPTURADO = """
+    TOTP capturado correctamente.
     """

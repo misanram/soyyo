@@ -16,6 +16,7 @@ class VentanaCaptura(QWidget):
     _ancho_original: int
     _alto_original: int
     imagen: Image.Image | None
+    error: Exception | None
     _btn_capturar = QPushButton
     _btn_cancelar = QPushButton
 
@@ -44,3 +45,6 @@ def setup(data_path: Path) -> EstadoApp: ...
 
 
 def captura(data_path: Path) -> EstadoApp: ...
+
+
+def lista(data_path: Path) -> EstadoApp: ...

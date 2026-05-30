@@ -1,6 +1,7 @@
 """
 Tests del módulo app.py
 """
+
 import logging
 from unittest.mock import patch
 
@@ -20,6 +21,18 @@ def test_get_options_reset():
     with patch('sys.argv', ['soyyo', '--reset']):
         argumentos = get_options().parse_args()
         assert argumentos.reset is True
+
+
+def test_get_options_captura():
+    with patch('sys.argv', ['soyyo', '--captura']):
+        argumentos = get_options().parse_args()
+        assert argumentos.captura is True
+
+
+def test_get_options_lista():
+    with patch('sys.argv', ['soyyo', '--lista']):
+        argumentos = get_options().parse_args()
+        assert argumentos.lista is True
 
 
 def test_run_llama_a_comprobar_estado(caplog):
@@ -49,38 +62,6 @@ def test_run_estado_erroneo(caplog):
     assert len(mensajes) == 2
     assert 'Estado inicial: EstadoApp.IMPOSIBLE' in mensajes[0]
     assert 'La aplicación ha caido en un estado imposible' in mensajes[1]
-
-
-def test_run_reset(caplog):
-    # @formatter:off
-    with (patch('sys.argv', ['soyyo', '--reset']),
-          caplog.at_level(logging.DEBUG),
-          patch('soyyo.app.comprobar_estado', return_value=EstadoApp.INICIALIZACION_CORRECTA),
-          patch('soyyo.app.reset', return_value=EstadoApp.PRIMER_ARRANQUE),
-          patch('soyyo.app.setup', return_value=EstadoApp.SALIENDO_OK), ):
-        # @formatter:on
-        with pytest.raises(SystemExit) as exc:
-            main()
-    mensajes = [r.message for r in caplog.records]
-    assert exc.value.code == 0
-    assert len(mensajes) == 2
-    assert 'Estado inicial: Programa iniciado correctamente' in mensajes[0]
-    assert 'Estado postreset: Primer arranque' in mensajes[1]
-
-
-def test_run_captura(caplog):
-    # @formatter:off
-    with (patch('sys.argv', ['soyyo', '--captura']),
-          caplog.at_level(logging.DEBUG),
-          patch('soyyo.app.comprobar_estado', return_value=EstadoApp.INICIALIZACION_CORRECTA),
-          patch('soyyo.app.captura', return_value=EstadoApp.SALIENDO_OK)):
-        # @formatter:on
-        with pytest.raises(SystemExit) as exc:
-            main()
-    mensajes = [r.message for r in caplog.records]
-    assert exc.value.code == 0
-    assert len(mensajes) == 1
-    assert 'Estado inicial: Programa iniciado correctamente' in mensajes
 
 
 def test_run_sin_keyring(caplog):
@@ -192,3 +173,50 @@ def test_main_error_no_controlado(caplog):
     assert exc.value.code == 1
     assert len(mensajes) == 1
     assert 'Error no controlado.' in mensajes
+
+
+def test_run_reset(caplog):
+    # @formatter:off
+    with (patch('sys.argv', ['soyyo', '--reset']),
+          caplog.at_level(logging.DEBUG),
+          patch('soyyo.app.comprobar_estado', return_value=EstadoApp.INICIALIZACION_CORRECTA),
+          patch('soyyo.app.reset', return_value=EstadoApp.PRIMER_ARRANQUE),
+          patch('soyyo.app.setup', return_value=EstadoApp.SALIENDO_OK), ):
+        # @formatter:on
+        with pytest.raises(SystemExit) as exc:
+            main()
+    mensajes = [r.message for r in caplog.records]
+    assert exc.value.code == 0
+    assert len(mensajes) == 2
+    assert 'Estado inicial: Programa iniciado correctamente' in mensajes[0]
+    assert 'Estado postreset: Primer arranque' in mensajes[1]
+
+
+def test_run_captura(caplog):
+    # @formatter:off
+    with (patch('sys.argv', ['soyyo', '--captura']),
+          caplog.at_level(logging.DEBUG),
+          patch('soyyo.app.comprobar_estado', return_value=EstadoApp.INICIALIZACION_CORRECTA),
+          patch('soyyo.app.captura', return_value=EstadoApp.SALIENDO_OK)):
+        # @formatter:on
+        with pytest.raises(SystemExit) as exc:
+            main()
+    mensajes = [r.message for r in caplog.records]
+    assert exc.value.code == 0
+    assert len(mensajes) == 1
+    assert 'Estado inicial: Programa iniciado correctamente' in mensajes
+
+
+def test_run_lista(caplog):
+    # @formatter:off
+    with (patch('sys.argv', ['soyyo', '--lista']),
+          caplog.at_level(logging.DEBUG),
+          patch('soyyo.app.comprobar_estado', return_value=EstadoApp.INICIALIZACION_CORRECTA),
+          patch('soyyo.app.lista', return_value=EstadoApp.SALIENDO_OK)):
+        # @formatter:on
+        with pytest.raises(SystemExit) as exc:
+            main()
+    mensajes = [r.message for r in caplog.records]
+    assert exc.value.code == 0
+    assert len(mensajes) == 1
+    assert 'Estado inicial: Programa iniciado correctamente' in mensajes

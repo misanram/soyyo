@@ -15,27 +15,28 @@ import uuid
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, unquote, urlsplit
 
+import keyring
 import keyring.errors as keyring_errors
 from cryptography.fernet import Fernet
-from keyring import delete_password, get_password, set_password
 from PIL import ImageGrab
 from PySide6.QtCore import QRect, QSize, Qt
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 from pyzbar.pyzbar import decode
 
-from soyyo.auxiliares import (autorizame, check_almacen, check_keyring, guardar_json, obtener_pin)
-from soyyo.constantes import (CURSORES, EstadoApp, FirmaInvalidaError, PepperNotFoundError,
-                              Zona, )
-from soyyo.mensajes import (MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA, MSG_ERROR_CAPTURA,
-                            MSG_ERROR_DECODIFICA, MSG_FICHERO_CORRUPTO, MSG_PROMPT_RESET, MSG_RESET_REALIZADO,
-                            MSG_SETUP,
-                            MSG_SIN_PEPPER, )
+from soyyo.auxiliares import (autorizame, check_almacen, check_keyring, guardar_json, obtener_pin,
+                              reintentar_keyring)
+from soyyo.constantes import CapturaError, CURSORES, EstadoApp, FirmaInvalidaError, PepperNotFoundError, Zona
+from soyyo.mensajes import (MSG_CABECERA, MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
+                            MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_FICHERO_CORRUPTO, MSG_PROMPT_RESET,
+                            MSG_RESET_REALIZADO, MSG_SETUP, MSG_SIN_PEPPER, MSG_TOTP_CAPTURADO)
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
 log = logging.getLogger(__name__)
 
 BORDE = 8
+
+keyring.get_password = reintentar_keyring()(keyring.get_password)
 
 
 class VentanaCaptura(QWidget):
@@ -51,6 +52,7 @@ class VentanaCaptura(QWidget):
         self._ancho_original = ancho
         self._alto_original = alto
         self.imagen = None
+        self.error = None
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMouseTracking(True)
@@ -96,14 +98,19 @@ class VentanaCaptura(QWidget):
         return zona
 
     def _capturar(self):
-        geo = self.geometry()
-        area = (geo.x(), geo.y() + 40,  # descarta la barra de botones
-                geo.x() + geo.width(), geo.y() + geo.height())
-        self.hide()
-        log.debug(f'Área a capturar: {area}')
-        self.imagen = ImageGrab.grab(bbox=area, all_screens=True)
-        self.show()
-        self.close()
+        area = None
+        try:
+            geo = self.geometry()
+            area = (geo.x(), geo.y() + 40,  # descarta la barra de botones
+                    geo.x() + geo.width(), geo.y() + geo.height())
+            self.hide()
+            log.debug(f'Área a capturar: {area}')
+            self.imagen = ImageGrab.grab(bbox=area, all_screens=True)
+            self.show()
+            self.close()
+        except Exception as error:
+            self.error = CapturaError('Falló la captura de pantalla', area=area, causa=error)
+            self.close()
 
     def mousePressEvent(self, event):
         """
@@ -267,7 +274,7 @@ def comprobar_estado(data_path):
             if firma is None:
                 raise FirmaInvalidaError
         cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
-        pepper = get_password('soyyo', 'pepper')
+        pepper = keyring.get_password('soyyo', 'pepper')
         if pepper:
             pepper64 = base64.b64decode(pepper)
             nueva_firma = hmac.new(pepper64, cadena_json, 'sha512').hexdigest()
@@ -298,7 +305,7 @@ def comprobar_estado(data_path):
         log.exception('Error al abrir el archivo JSON.')
         return EstadoApp.FICHERO_CORRUPTO
     except OSError:
-        log.exception("Fallo al abrir '%s'", data_path)
+        log.exception("Fallo al leer '%s'", data_path)
         return EstadoApp.FICHERO_CORRUPTO
     except Exception:
         log.exception('Error indeterminado en el proceso de comprobar_estado.')
@@ -310,14 +317,12 @@ def reset(data_path):
     Elimina (si existen) el almacen de datos y la clave pepper del keyring
     """
 
-    if sys.stdout.isatty():
-        print('\033[2J\033[H', end='')  # pragma: no cover
-
     while True:
         if sys.stdout.isatty():
-            print('\033[2J\033[H', end='')  # pragma: no cover
+            print('\033c', end='')  # pragma: no cover
 
         try:
+            print(MSG_CABECERA)
             data = input(MSG_PROMPT_RESET).upper().strip()
         except KeyboardInterrupt:
             data = 'C'
@@ -328,13 +333,11 @@ def reset(data_path):
         if data == 'S':
             data_path.unlink(missing_ok=True)
             try:
-                delete_password('soyyo', 'pepper')
+                keyring.delete_password('soyyo', 'pepper')
             except keyring_errors.PasswordDeleteError:
                 pass
             print(MSG_RESET_REALIZADO)
-            return EstadoApp.PRIMER_ARRANQUE
-        else:
-            return EstadoApp.SALIENDO_OK
+        return EstadoApp.SALIENDO_OK
 
 
 def setup(data_path):
@@ -345,13 +348,14 @@ def setup(data_path):
     try:
         while True:
             if sys.stdout.isatty():
-                print('\033[2J\033[H', end='')  # pragma: no cover
+                print('\033c', end='')  # pragma: no cover
 
+            print(MSG_CABECERA)
             print(MSG_SETUP)
             preguntas = ['PIN', 'Repita el PIN']
 
             try:
-                pines = [obtener_pin(arg, False) for arg in preguntas]
+                pines = [obtener_pin(arg, True) for arg in preguntas]
                 print('\r')
             except KeyboardInterrupt:
                 return EstadoApp.SALIENDO_OK
@@ -381,7 +385,7 @@ def setup(data_path):
         totp = {}
         datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'bloqueado_hasta': None,
                  'num_bloqueos': 0, 'totp': totp}
-        set_password('soyyo', 'pepper', pepper_64)
+        keyring.set_password('soyyo', 'pepper', pepper_64)
         guardar_json(data_path, datos)  # guardar_json no devuelve nada, guarda datos o levanta una excepción.
         return EstadoApp.SALIENDO_OK
 
@@ -393,7 +397,7 @@ def setup(data_path):
         log.exception('Error al escribir archivo %s', data_path)
         print(error)
         try:
-            delete_password('soyyo', 'pepper')
+            keyring.delete_password('soyyo', 'pepper')
         except keyring_errors.PasswordDeleteError as sobreerror:
             log.exception('Error al eliminar el pepper del keyring')
             print(sobreerror)
@@ -413,6 +417,9 @@ def captura(data_path):
         ventana = VentanaCaptura(300, 300)
         ventana.show()
         app.exec()
+
+        if ventana.error:
+            raise ventana.error
 
         # datos[0] es el almacen JSON transformado en diccionario (dict[str, str])
         # datos[1] es el PIN (bytes)
@@ -446,14 +453,15 @@ def captura(data_path):
                 # totp_encriptado = f.encrypt(totp_bytes)
                 # # bytes -> str
                 # totp_encriptado_str = totp_encriptado.decode('utf-8')
-                pepper64 = get_password('soyyo', 'pepper')
+                pepper64 = keyring.get_password('soyyo', 'pepper')
                 if pepper64:
                     pepper = base64.b64decode(pepper64)
                     salt = base64.b64decode(datos[0]['autorizacion']['salt'])
                     dk = hashlib.pbkdf2_hmac('sha256', bytes(datos[1]) + pepper, salt, 500_000, dklen=64)
+                    clave_fernet = base64.urlsafe_b64encode(dk[32:])
+                    fernet = Fernet(clave_fernet)
                     # Para encriptar el dato debe ser bytes
-                    totp_encriptado = Fernet(base64.urlsafe_b64encode(dk[32:])).encrypt(
-                            json.dumps(totp).encode('utf-8'))
+                    totp_encriptado = fernet.encrypt(json.dumps(totp).encode('utf-8'))
                     # JSON solo admite str. Para introducir el totp_encriptado en un JSON hay que
                     # transformarlo en str
                     datos[0]['totp'].update({str(uuid.uuid4()): totp_encriptado.decode()})
@@ -468,8 +476,13 @@ def captura(data_path):
             log.warning('No se ha podido capturar una imagen.')
             print(MSG_ERROR_CAPTURA)
             return EstadoApp.SALIENDO_ERROR
+        print(MSG_TOTP_CAPTURADO)
         return EstadoApp.SALIENDO_OK
 
+    except CapturaError:
+        log.exception(CapturaError)
+        print(MSG_ERROR_CAPTURA)
+        return EstadoApp.SALIENDO_ERROR
     except PepperNotFoundError:
         log.exception(PepperNotFoundError.__doc__)
         print(MSG_SIN_PEPPER)
@@ -480,4 +493,50 @@ def captura(data_path):
         return EstadoApp.SALIENDO_ERROR
     except Exception:
         log.exception('Error indeterminado en el proceso de captura.')
+        raise
+
+
+def lista(data_path):
+    """
+    Lista los TOTP que hay en el almacén.
+
+    """
+
+    try:
+        # datos[0] es el almacen JSON transformado en diccionario (dict[str, str])
+        # datos[1] es el PIN (bytes)
+        autoriza, datos, estado = autorizame(data_path)
+
+        if not autoriza:
+            # autorizame loguea los errores correctamente, no hace falta loguearlos de nuevo
+            # Devuelve el estado correcto
+            return estado
+
+        pepper64 = keyring.get_password('soyyo', 'pepper')
+        if pepper64:
+            pepper = base64.b64decode(pepper64)
+            salt = base64.b64decode(datos[0]['autorizacion']['salt'])
+            dk = hashlib.pbkdf2_hmac('sha256', bytes(datos[1]) + pepper, salt, 500_000, dklen=64)
+            clave_fernet = base64.urlsafe_b64encode(dk[32:])
+            fernet = Fernet(clave_fernet)
+            if sys.stdout.isatty():
+                print('\033c', end='')  # pragma: no cover
+            print(MSG_CABECERA)
+            if datos[0]['totp']:
+                for orden, totp in enumerate(datos[0]['totp'].values()):
+                    nombre = json.loads(fernet.decrypt(totp.encode('utf-8')).decode('utf-8'))['nombre']
+                    print(orden, nombre)
+                print('\nSeleccione un TOTP para realizar acciones sobre él.')
+            else:
+                print('\nNo hay ningún TOTP registrado.')
+        else:
+            raise PepperNotFoundError
+        return EstadoApp.SALIENDO_OK
+
+    except PepperNotFoundError:
+        log.exception(PepperNotFoundError.__doc__)
+        print(MSG_SIN_PEPPER)
+        return EstadoApp.SALIENDO_ERROR
+    except Exception:
+        log.exception('Error indeterminado en el proceso lista.')
         raise
