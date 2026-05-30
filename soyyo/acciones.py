@@ -25,11 +25,11 @@ from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 from pyzbar.pyzbar import decode
 
 from soyyo.auxiliares import (autorizame, check_almacen, check_keyring, guardar_json, obtener_pin,
-                              reintentar_keyring)
+                              reintentar_keyring, )
 from soyyo.constantes import CapturaError, CURSORES, EstadoApp, FirmaInvalidaError, PepperNotFoundError, Zona
 from soyyo.mensajes import (MSG_CABECERA, MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
                             MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_FICHERO_CORRUPTO, MSG_PROMPT_RESET,
-                            MSG_RESET_REALIZADO, MSG_SETUP, MSG_SIN_PEPPER, MSG_TOTP_CAPTURADO)
+                            MSG_RESET_REALIZADO, MSG_SETUP, MSG_SIN_PEPPER, MSG_TOTP_CAPTURADO, )
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
 log = logging.getLogger(__name__)
@@ -441,12 +441,14 @@ def captura(data_path):
                 label = unquote(uri.path.lstrip(b'/'))  # type: ignore
                 issuer, account = label.split(':', 1) if ':' in label else ('', label)
                 parametros: dict[bytes, list] = parse_qs(uri.query)  # type: ignore
-                totp = dict(uri=decodificada[0].data.decode(), issuer=issuer, account=account,
+                totp = dict(uri=decodificada[0].data.decode(),
+                            issuer=issuer,
+                            account=account,
                             nombre=parametros.get(b'issuer', [issuer.encode('utf8')])[0].decode(),
                             secret=parametros.get(b'secret', [b''])[0].decode(),
                             digits=int(parametros.get(b'digits', [6])[0]),
                             period=int(parametros.get(b'period', [30])[0]),
-                            algoritmo=parametros.get(b'algorithm', ['SHA1'])[0])
+                            algoritmo=parametros.get(b'algorithm', [b'SHA1'])[0].decode())
                 # # Serializar
                 # totp_json = json.dumps(totp)
                 # # str -> bytes
