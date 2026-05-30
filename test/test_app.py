@@ -187,9 +187,11 @@ def test_run_reset(caplog):
             main()
     mensajes = [r.message for r in caplog.records]
     assert exc.value.code == 0
-    assert len(mensajes) == 2
+    assert len(mensajes) == 4
     assert 'Estado inicial: Programa iniciado correctamente' in mensajes[0]
-    assert 'Estado postreset: Primer arranque' in mensajes[1]
+    assert 'Acción solicitada: reset' in mensajes[1]
+    assert 'Estado postreset: Primer arranque' in mensajes[2]
+    assert 'Acción solicitada: setup' in mensajes[3]
 
 
 def test_run_captura(caplog):
@@ -203,8 +205,9 @@ def test_run_captura(caplog):
             main()
     mensajes = [r.message for r in caplog.records]
     assert exc.value.code == 0
-    assert len(mensajes) == 1
-    assert 'Estado inicial: Programa iniciado correctamente' in mensajes
+    assert len(mensajes) == 2
+    assert 'Estado inicial: Programa iniciado correctamente' in mensajes[0]
+    assert 'Acción solicitada: captura' in mensajes[1]
 
 
 def test_run_lista(caplog):
@@ -218,5 +221,6 @@ def test_run_lista(caplog):
             main()
     mensajes = [r.message for r in caplog.records]
     assert exc.value.code == 0
-    assert len(mensajes) == 1
-    assert 'Estado inicial: Programa iniciado correctamente' in mensajes
+    assert len(mensajes) == 2
+    assert 'Estado inicial: Programa iniciado correctamente' in mensajes[0]
+    assert 'Acción solicitada: lista' in mensajes[1]

@@ -19,7 +19,7 @@ import keyring
 import keyring.errors as keyring_errors
 
 from soyyo.constantes import EstadoApp, FirmaInvalidaError, PepperNotFoundError, TIEMPO_DE_BLOQUEO
-from soyyo.mensajes import (MSG_CABECERA, MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
+from soyyo.mensajes import (MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
                             MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS, MSG_FIRMA_INVALIDA, MSG_SIN_PEPPER)
 
 log = logging.getLogger(__name__)
@@ -142,9 +142,6 @@ def obtener_pin(prompt_head, setup=True):
             print('\nEl PIN debe tener entre 8 y 20 cifras.\n')
             time.sleep(1)
             continue
-        elif not setup and not (8 <= len(data) <= 20):
-            time.sleep(1)
-            continue
         return data
 
 
@@ -153,6 +150,7 @@ def validar_pin(data_path, pin):
     Se comprueba que el PIN recibido es correcto
     """
 
+    pepper64 = None
     try:
         with open(data_path, 'r', encoding='utf8') as fin:
             datos = json.load(fin)
@@ -160,7 +158,7 @@ def validar_pin(data_path, pin):
             salt = base64.b64decode(datos['autorizacion']['salt'])
         pepper64 = keyring.get_password('soyyo', 'pepper')
         if pepper64:
-            pepper = base64.b64decode(pepper64)
+            pepper = bytearray(base64.b64decode(pepper64))
             dk = hashlib.pbkdf2_hmac('sha256', bytes(pin) + pepper, salt, 500_000, dklen=64)
             return hmac.compare_digest(dk[:32], _hash)
         raise PepperNotFoundError
@@ -173,6 +171,14 @@ def validar_pin(data_path, pin):
     except OSError as error:
         log.warning("Fallo al leer '%s': %s", data_path, error)
         raise
+    finally:
+        for i in range(len(pin)):
+            pin[i] = 0
+        del pin
+        if pepper64:
+            for i in range(len(pepper)):
+                pepper[i] = 0
+            del pepper
 
 
 def guardar_json(data_path, datos):
@@ -249,9 +255,6 @@ def autorizame(data_path):
     que ha pedido autorización lo devuelva al programa.
     """
 
-    if sys.stdout.isatty():
-        print('\033c', end='')  # pragma: no cover
-
     try:
         datos = cargar_y_verificar_almacen(data_path)
         intento = datos['intentos']
@@ -267,23 +270,28 @@ def autorizame(data_path):
             print(MSG_ERROR_APP_BLOQUEDA)
             return False, None, EstadoApp.SALIENDO_OK
 
-        while intento <= 3:
+        while intento < 3:
             try:
-                print(MSG_CABECERA)
                 pin = obtener_pin('Introduzca el PIN', setup=False)
                 print('\r')
             except KeyboardInterrupt:
                 log.info('Cancelado por el usuario.')
+                bloqueado_hasta = (
+                        datetime.now(timezone.utc) + timedelta(
+                        minutes=TIEMPO_DE_BLOQUEO[num_bloqueos])).isoformat()
+                datos.update(
+                        dict(intentos=intento, num_bloqueos=num_bloqueos, bloqueado_hasta=bloqueado_hasta))
+                guardar_json(data_path, datos)
                 return False, None, EstadoApp.SALIENDO_OK
 
             if validar_pin(data_path, pin):
-                log.info('PIN correcto')
+                log.debug('PIN correcto')
                 datos.update(dict(intentos=0, num_bloqueos=0, bloqueado_hasta=None))
                 guardar_json(data_path, datos)
                 return True, (datos, pin), None
             else:
-                log.info('PIN erróneo, intento %s', intento)
                 intento += 1
+                log.debug('PIN erróneo, intento: %s bloqueo: %s', intento, num_bloqueos)
                 datos.update(dict(intentos=intento))
                 guardar_json(data_path, datos)
 

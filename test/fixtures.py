@@ -35,7 +35,7 @@ def almacen_valido(tmp_path):
             momento = None
         else:
             momento = (datetime.now(timezone.utc) + timedelta(minutes=minutos_bloqueo)).isoformat()
-        datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 1, 'bloqueado_hasta': momento,
+        datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'bloqueado_hasta': momento,
                  'num_bloqueos': num_bloqueos, 'totp': totp}
         cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
 
@@ -47,7 +47,7 @@ def almacen_valido(tmp_path):
             firma = hmac.new(pepper, cadena_json, 'sha512').hexdigest()
         if manipulado:
             num_bloqueos -= 1
-        datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 1, 'bloqueado_hasta': momento,
+        datos = {'version': 1, 'autorizacion': autorizacion, 'intentos': 0, 'bloqueado_hasta': momento,
                  'num_bloqueos': num_bloqueos, 'totp': totp, 'firma': firma}
         fichero = tmp_path / 'datos.json'
         with open(fichero, 'w', encoding='utf8') as fout:

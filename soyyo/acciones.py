@@ -412,6 +412,8 @@ def captura(data_path):
     Captura el QR de un secreto TOTP
     """
 
+    pepper64 = None
+    datos = None
     try:
         app = QApplication(sys.argv)
         ventana = VentanaCaptura(300, 300)
@@ -455,7 +457,7 @@ def captura(data_path):
                 # totp_encriptado_str = totp_encriptado.decode('utf-8')
                 pepper64 = keyring.get_password('soyyo', 'pepper')
                 if pepper64:
-                    pepper = base64.b64decode(pepper64)
+                    pepper = bytearray(base64.b64decode(pepper64))
                     salt = base64.b64decode(datos[0]['autorizacion']['salt'])
                     dk = hashlib.pbkdf2_hmac('sha256', bytes(datos[1]) + pepper, salt, 500_000, dklen=64)
                     clave_fernet = base64.urlsafe_b64encode(dk[32:])
@@ -494,6 +496,15 @@ def captura(data_path):
     except Exception:
         log.exception('Error indeterminado en el proceso de captura.')
         raise
+    finally:
+        if datos:
+            for i in range(len(datos[1])):
+                datos[1][i] = 0
+            del datos
+        if pepper64:
+            for i in range(len(pepper)):
+                pepper[i] = 0
+            del pepper
 
 
 def lista(data_path):
@@ -502,7 +513,12 @@ def lista(data_path):
 
     """
 
+    pepper64 = None
+    datos = None
     try:
+        if sys.stdout.isatty():
+            print('\033c', end='')  # pragma: no cover
+        print(MSG_CABECERA)
         # datos[0] es el almacen JSON transformado en diccionario (dict[str, str])
         # datos[1] es el PIN (bytes)
         autoriza, datos, estado = autorizame(data_path)
@@ -514,14 +530,11 @@ def lista(data_path):
 
         pepper64 = keyring.get_password('soyyo', 'pepper')
         if pepper64:
-            pepper = base64.b64decode(pepper64)
+            pepper = bytearray(base64.b64decode(pepper64))
             salt = base64.b64decode(datos[0]['autorizacion']['salt'])
             dk = hashlib.pbkdf2_hmac('sha256', bytes(datos[1]) + pepper, salt, 500_000, dklen=64)
             clave_fernet = base64.urlsafe_b64encode(dk[32:])
             fernet = Fernet(clave_fernet)
-            if sys.stdout.isatty():
-                print('\033c', end='')  # pragma: no cover
-            print(MSG_CABECERA)
             if datos[0]['totp']:
                 for orden, totp in enumerate(datos[0]['totp'].values()):
                     nombre = json.loads(fernet.decrypt(totp.encode('utf-8')).decode('utf-8'))['nombre']
@@ -540,3 +553,11 @@ def lista(data_path):
     except Exception:
         log.exception('Error indeterminado en el proceso lista.')
         raise
+    finally:
+        for i in range(len(datos[1])):
+            datos[1][i] = 0
+        del datos
+        if pepper64:
+            for i in range(len(pepper)):
+                pepper[i] = 0
+            del pepper

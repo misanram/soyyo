@@ -85,4 +85,4 @@ CURSORES = {Zona.BORDE_SUPERIOR: Qt.CursorShape.SizeVerCursor,
             Zona.ESQUINA_INFERIOR_IZQUIERDA: Qt.CursorShape.SizeBDiagCursor,
             Zona.BARRA: Qt.CursorShape.SizeAllCursor, Zona.INTERIOR: Qt.CursorShape.ArrowCursor, }
 
-TIEMPO_DE_BLOQUEO = {1: 1, 2: 5, 3: 15, 4: 30, 5: 60, 6: 4 * 60, 7: 12 * 60, 8: 24 * 60, 9: 48 * 60}
+TIEMPO_DE_BLOQUEO = {0: 0, 1: 1, 2: 5, 3: 15, 4: 30, 5: 60, 6: 4 * 60, 7: 12 * 60, 8: 24 * 60, 9: 48 * 60}

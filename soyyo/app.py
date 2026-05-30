@@ -63,6 +63,7 @@ class Aplicacion:
             log.debug('Estado inicial: %s', estado)
 
             if self.args.reset and estado not in (EstadoApp.SIN_KEYRING,):
+                log.debug('Acción solicitada: reset')
                 estado = reset(self.data_path)
                 log.debug('Estado postreset: %s', estado)
 
@@ -92,12 +93,15 @@ class Aplicacion:
                     sys.exit(0)
 
                 elif estado == EstadoApp.PRIMER_ARRANQUE:
+                    log.debug('Acción solicitada: setup')
                     estado = setup(self.data_path)
 
                 elif estado == EstadoApp.INICIALIZACION_CORRECTA:
                     if self.args.captura:
+                        log.debug('Acción solicitada: captura')
                         estado = captura(self.data_path)
                     elif self.args.lista:
+                        log.debug('Acción solicitada: lista')
                         estado = lista(self.data_path)
                     else:
                         print(not all(vars(self.args).values()))

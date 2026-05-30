@@ -208,7 +208,10 @@ def test_obtener_pin_pin_corto(capsys, setup, respuesta):
         resultado = obtener_pin('PIN: ', setup)
         captured = capsys.readouterr()
     assert respuesta in captured.out
-    assert resultado == bytearray(b'12345678')
+    if setup:
+        assert resultado == bytearray(b'12345678')
+    else:
+        assert resultado == bytearray(b'1234567')
 
 
 @pytest.mark.parametrize('setup, respuesta',
@@ -226,7 +229,10 @@ def test_obtener_pin_pin_vacio(capsys, setup, respuesta):
         resultado = obtener_pin('PIN: ', setup)
         captured = capsys.readouterr()
     assert respuesta in captured.out
-    assert resultado == bytearray(b'12345678')
+    if setup:
+        assert resultado == bytearray(b'12345678')
+    else:
+        assert resultado == bytearray(b'')
 
 
 @pytest.mark.parametrize('setup, respuesta',
@@ -246,7 +252,10 @@ def test_obtener_pin_pin_largo(capsys, setup, respuesta):
         resultado = obtener_pin('PIN: ', setup)
         captured = capsys.readouterr()
     assert respuesta in captured.out
-    assert resultado == bytearray(b'12345678')
+    if setup:
+        assert resultado == bytearray(b'12345678')
+    else:
+        assert resultado == bytearray(b'123456789012345678901234')
 
 
 @pytest.mark.parametrize('setup', [True, False])
@@ -469,19 +478,42 @@ def test_autorizame_bloqueo_permanente(almacen_valido, caplog):
         assert 'Aplicación bloqueada.' in mensajes[0]
 
 
-def test_autorizame_KeyboardInterrupt(almacen_valido, caplog):
+# @formatter:off
+@pytest.mark.parametrize('pins, intentos_fallidos',
+                         [([KeyboardInterrupt], 0), # cancela,
+                          ([bytearray(b'00000000'), KeyboardInterrupt], 1), # falla 1, cancela
+                          ([bytearray(b'00000000'), bytearray(b'00000000'), KeyboardInterrupt], 2), # falla 2, cancela
+                          ])
+# @formatter:on
+def test_autorizame_KeyboardInterrupt(almacen_valido, caplog, pins, intentos_fallidos):
     fichero, pepper = almacen_valido()
     # @formatter:off
-    with (patch('soyyo.auxiliares.obtener_pin', side_effect=KeyboardInterrupt),
+    with (patch('soyyo.auxiliares.obtener_pin', side_effect=pins),
           patch('soyyo.auxiliares.keyring.get_password',return_value=pepper),
-          caplog.at_level(logging.INFO)):
+          caplog.at_level(logging.DEBUG)):
         # @formatter:on
         resultado = autorizame(fichero)
-        mensajes = [r.message for r in caplog.records]
-        assert resultado[0] is False
-        assert resultado[1] is None
-        assert resultado[2] == EstadoApp.SALIENDO_OK
-        assert 'Cancelado por el usuario.' in mensajes[0]
+        with open(fichero, 'rb') as fin:
+            datos = json.load(fin)
+            mensajes = [r.message for r in caplog.records]
+        if intentos_fallidos == 0:
+            assert datos['intentos'] == 0
+            assert datos['num_bloqueos'] == 0
+            assert 'Cancelado por el usuario.' in mensajes[0]
+        elif intentos_fallidos == 1:
+            assert datos['intentos'] == 1
+            assert datos['num_bloqueos'] == 0
+            assert 'PIN erróneo, intento: 1 bloqueo: 0' in mensajes[0]
+            assert 'Cancelado por el usuario.' in mensajes[1]
+        elif intentos_fallidos == 2:
+            assert datos['intentos'] == 2
+            assert datos['num_bloqueos'] == 0
+            assert resultado[0] is False
+            assert resultado[1] is None
+            assert resultado[2] == EstadoApp.SALIENDO_OK
+            assert 'PIN erróneo, intento: 1 bloqueo: 0' in mensajes[0]
+            assert 'PIN erróneo, intento: 2 bloqueo: 0' in mensajes[1]
+            assert 'Cancelado por el usuario.' in mensajes[2]
 
 
 # @formatter:off
@@ -496,13 +528,17 @@ def test_autorizame_intentos(almacen_valido, caplog, pins, intentos_fallidos):
     # @formatter:off
     with (patch('soyyo.auxiliares.obtener_pin', side_effect=pins),
           patch('soyyo.auxiliares.keyring.get_password', return_value=pepper),
-          caplog.at_level(logging.INFO)):
+          caplog.at_level(logging.DEBUG)):
         # @formatter:on
         autoriza, datos, estado = autorizame(fichero)
     assert caplog.text.count('PIN erróneo') == intentos_fallidos
     if intentos_fallidos == 3:
         assert autoriza is False
         assert estado == EstadoApp.SALIENDO_OK
+        with open(fichero, 'rb') as fin:
+            datos = json.load(fin)
+        assert datos['intentos'] == 0
+        assert datos['num_bloqueos'] == 1
     else:
         assert autoriza is True
         assert estado is None

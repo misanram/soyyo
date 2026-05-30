@@ -608,7 +608,7 @@ def test_captura_no_autoriza(tmp_path):
     # @formatter:off
     with (patch('soyyo.acciones.QApplication'),
           patch('soyyo.acciones.VentanaCaptura') as mock_ventana,
-          patch('soyyo.acciones.autorizame', return_value=(False, None, EstadoApp.SIN_PEPPER)),):
+          patch('soyyo.acciones.autorizame', return_value=(False, (None, bytearray(b'')), EstadoApp.SIN_PEPPER)),):
         # @formatter:on
         mock_ventana.return_value.imagen = None
         mock_ventana.return_value.error = False
@@ -622,7 +622,7 @@ def test_captura_sin_imagen(tmp_path):
     with (patch('soyyo.acciones.QApplication'),
           patch('soyyo.acciones.VentanaCaptura') as mock_ventana,
           patch('soyyo.acciones.decode', return_value=[]),
-          patch('soyyo.acciones.autorizame', return_value=(True, None, None)),):
+          patch('soyyo.acciones.autorizame', return_value=(True, (None, bytearray(b'')), None)),):
         # @formatter:on
         mock_ventana.return_value.imagen = None
         mock_ventana.return_value.error = False
@@ -636,7 +636,7 @@ def test_captura_imagen_error(tmp_path, caplog):
     with (patch('soyyo.acciones.QApplication'),
           patch('soyyo.acciones.VentanaCaptura') as mock_ventana,
           patch('soyyo.acciones.decode', return_value=[]),
-          patch('soyyo.acciones.autorizame', return_value=(True, None, None)),
+          # patch('soyyo.acciones.autorizame', return_value=(True, (None, bytearray(b'')), None)),
           caplog.at_level(logging.ERROR),):
         # @formatter:on
         mock_ventana.return_value.imagen = None
@@ -652,7 +652,7 @@ def test_captura_imagen_sin_qr(tmp_path):
     with (patch('soyyo.acciones.QApplication'),
           patch('soyyo.acciones.VentanaCaptura') as mock_ventana,
           patch('soyyo.acciones.decode', return_value=[]),
-          patch('soyyo.acciones.autorizame', return_value=(True, None, None)),):
+          patch('soyyo.acciones.autorizame', return_value=(True, (None, bytearray(b'')), None)),):
         # @formatter:on
         mock_ventana.return_value.imagen = 'imagen_falsa'
         mock_ventana.return_value.error = False
@@ -670,7 +670,7 @@ def test_captura_sin_pepper(almacen_valido):
         mock_decoded = MagicMock()
         mock_decoded.data = b'otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP'
         with (patch('soyyo.acciones.QApplication'),
-              patch('soyyo.acciones.autorizame', return_value=(True, None, None)),
+              patch('soyyo.acciones.autorizame', return_value=(True, (None, bytearray(b'')), None)),
               patch('soyyo.acciones.decode', return_value=[mock_decoded]),
               patch('soyyo.acciones.keyring.get_password', return_value=None),):
             # @formatter:on
@@ -739,7 +739,7 @@ def test_lista_funciona_bien_con_totps(almacen_valido):
 
 def test_lista_no_autoriza(tmp_path):
     # @formatter:off
-    with patch('soyyo.acciones.autorizame', return_value=(False, None, EstadoApp.SIN_PEPPER)):
+    with patch('soyyo.acciones.autorizame', return_value=(False,  (None, bytearray(b'')), EstadoApp.SIN_PEPPER)):
         # @formatter:on
         fichero = tmp_path / 'datos.json'
         resultado = lista(fichero)
@@ -749,7 +749,7 @@ def test_lista_no_autoriza(tmp_path):
 def test_lista_sin_pepper(almacen_valido):
     fichero, pepper = almacen_valido()
     # @formatter:off
-    with (patch('soyyo.acciones.autorizame', return_value=(True, None, None)),
+    with (patch('soyyo.acciones.autorizame', return_value=(True, (None, bytearray(b'')), None)),
           patch('soyyo.acciones.keyring.get_password', return_value=None),):
         # @formatter:on
         resultado = lista(fichero)
