@@ -63,4 +63,6 @@ esta estructura:
 }
 ```
 
-
+Este proyecto contiene código original de la traducción del módulo argparse publicado bajo la licencia MIT por Félix
+Medrano, 2023 y Benno Schulenberg <vertaling@coevern.nl>, 2025.
+Las modificaciones y el proyecto en su conjunto se distribuyen ahora bajo la licencia GNU GPLv3.

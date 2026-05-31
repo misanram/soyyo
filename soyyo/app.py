@@ -3,8 +3,10 @@ Módulo prinicpal
 """
 
 import argparse
+import gettext
 import locale
 import logging
+import os
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -16,12 +18,17 @@ from soyyo.mensajes import (MSG_ERROR_NO_CONTROLADO, MSG_FICHERO_CORRUPTO, MSG_F
 
 locale.setlocale(locale.LC_ALL, '')
 log = logging.getLogger(__name__)
-file_handler = RotatingFileHandler(Path(sys.prefix) / 'soyyo.log', maxBytes=1_000_000, backupCount=5)
+file_handler = RotatingFileHandler(Path(sys.prefix) / '../' / 'soyyo.log', maxBytes=1_000_000, backupCount=5)
 logging.basicConfig(level=logging.WARNING,
                     handlers=[file_handler],
                     force=True,
                     format='%(asctime)s %(levelname)-5.5s [%(name)s:%(lineno)s][%(threadName)s] %(message)s')
 logging.getLogger('soyyo').setLevel(logging.DEBUG)
+
+ruta_locales = Path(os.path.dirname(__file__)) / 'locales'
+traduccion = gettext.translation('messages', localedir=ruta_locales, languages=['es'], fallback=True)
+argparse._ = traduccion.gettext
+argparse.ngettext = traduccion.ngettext
 
 
 def get_options():
@@ -35,9 +42,9 @@ def get_options():
                                      epilog='', )
     grupo = parser.add_mutually_exclusive_group()
     grupo.add_argument('--test', action='store_true', help=argparse.SUPPRESS)  # para test con pytest
-    grupo.add_argument('--reset', action='store_true', help='Reinicia el programa a su estado de fábrica.')
-    grupo.add_argument('--captura', action='store_true', help='Captura un QR.')
-    grupo.add_argument('--lista', action='store_true', help='Lista los TOTP almacenados.')
+    grupo.add_argument('--reset', action='store_true', help='Reinicia el programa a su estado de fábrica')
+    grupo.add_argument('--captura', action='store_true', help='Captura un QR')
+    grupo.add_argument('--lista', action='store_true', help='Lista los TOTP almacenados')
     return parser
 
 
@@ -47,7 +54,7 @@ class Aplicacion:
     """
 
     def __init__(self, args):
-        root_path = Path(sys.prefix)
+        root_path = (Path(sys.prefix) / '../').resolve()
         # bin_path = Path(sys.executable).parent
         # self.app_executable = bin_path / 'soyyo'
         self.data_path = root_path / 'soyyo_data.json'
