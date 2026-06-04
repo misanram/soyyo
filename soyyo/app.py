@@ -17,13 +17,14 @@ from soyyo.mensajes import (MSG_ERROR_NO_CONTROLADO, MSG_FICHERO_CORRUPTO, MSG_F
                             MSG_SALIENDO_ERROR, MSG_SALIENDO_OK, MSG_SIN_KEYRING, MSG_SIN_PEPPER, )
 
 locale.setlocale(locale.LC_ALL, '')
-log = logging.getLogger(__name__)
-file_handler = RotatingFileHandler(Path(sys.prefix) / '../' / 'soyyo.log', maxBytes=1_000_000, backupCount=5)
+
+file_handler = RotatingFileHandler(Path(sys.prefix) / '../soyyo.log', maxBytes=1_000_000, backupCount=5)
 logging.basicConfig(level=logging.WARNING,
                     handlers=[file_handler],
                     force=True,
                     format='%(asctime)s %(levelname)-5.5s [%(name)s:%(lineno)s][%(threadName)s] %(message)s')
 logging.getLogger('soyyo').setLevel(logging.DEBUG)
+log = logging.getLogger(__name__)
 
 ruta_locales = Path(os.path.dirname(__file__)) / 'locales'
 traduccion = gettext.translation('messages', localedir=ruta_locales, languages=['es'], fallback=True)

@@ -64,7 +64,7 @@ class FirmaInvalidaError(ErrorApp):
     """
 
 
-class CapturaError(Exception):
+class CapturaError(ErrorApp):
     """
     Error durante la captura de imagen
     """

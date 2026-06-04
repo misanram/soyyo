@@ -13,6 +13,7 @@ import sys
 import time
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
 import keyring
@@ -31,10 +32,11 @@ from soyyo.mensajes import (MSG_CABECERA, MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_
                             MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_FICHERO_CORRUPTO, MSG_PROMPT_RESET,
                             MSG_RESET_REALIZADO, MSG_SETUP, MSG_SIN_PEPPER, MSG_TOTP_CAPTURADO, )
 
-os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
-log = logging.getLogger(__name__)
-
 BORDE = 8
+
+os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
+
+log = logging.getLogger(__name__)
 
 keyring.get_password = reintentar_keyring()(keyring.get_password)
 
@@ -412,8 +414,8 @@ def captura(data_path):
     Captura el QR de un secreto TOTP
     """
 
-    pepper64 = None
-    datos = None
+    pepper: Any = None
+    datos: Any = None
     try:
         app = QApplication(sys.argv)
         ventana = VentanaCaptura(300, 300)
@@ -499,11 +501,11 @@ def captura(data_path):
         log.exception('Error indeterminado en el proceso de captura.')
         raise
     finally:
-        if datos:
+        if datos is not None:
             for i in range(len(datos[1])):
                 datos[1][i] = 0
             del datos
-        if pepper64:
+        if pepper is not None:
             for i in range(len(pepper)):
                 pepper[i] = 0
             del pepper
@@ -515,8 +517,8 @@ def lista(data_path):
 
     """
 
-    pepper64 = None
-    datos = None
+    pepper: Any = None
+    datos: Any = None
     try:
         if sys.stdout.isatty():
             print('\033c', end='')  # pragma: no cover
@@ -556,10 +558,11 @@ def lista(data_path):
         log.exception('Error indeterminado en el proceso lista.')
         raise
     finally:
-        for i in range(len(datos[1])):
-            datos[1][i] = 0
-        del datos
-        if pepper64:
+        if datos:
+            for i in range(len(datos[1])):
+                datos[1][i] = 0
+            del datos
+        if pepper:
             for i in range(len(pepper)):
                 pepper[i] = 0
             del pepper

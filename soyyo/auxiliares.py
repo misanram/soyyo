@@ -14,6 +14,7 @@ import tty
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from string import digits
+from typing import Any
 
 import keyring
 import keyring.errors as keyring_errors
@@ -150,7 +151,7 @@ def validar_pin(data_path, pin):
     Se comprueba que el PIN recibido es correcto
     """
 
-    pepper64 = None
+    pepper: Any = None
     try:
         with open(data_path, 'r', encoding='utf8') as fin:
             datos = json.load(fin)
@@ -175,7 +176,7 @@ def validar_pin(data_path, pin):
         for i in range(len(pin)):
             pin[i] = 0
         del pin
-        if pepper64:
+        if pepper:
             for i in range(len(pepper)):
                 pepper[i] = 0
             del pepper
