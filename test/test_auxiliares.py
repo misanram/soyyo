@@ -11,14 +11,39 @@ import keyring.errors as keyring_errors
 import pytest
 
 from soyyo.auxiliares import (autorizame, cargar_y_verificar_almacen, check_almacen, check_keyring,
-                              guardar_json, obtener_pin, reintentar_keyring, validar_pin)
-from soyyo.constantes import EstadoApp, FirmaInvalidaError, PepperNotFoundError
+                              guardar_json, muestra_tabla, obtener_pin, reintentar_keyring, Usable,
+                              validar_pin)
+from soyyo.constantes import ErrorApp, EstadoApp, FirmaInvalidaError, PepperNotFoundError
 from .fixtures import almacen_valido
+
+
+def test_usable_max_len():
+    Usable.instancias = 0
+    Usable.max_len = {}
+    for _ in range(100):
+        Usable(ruta='/ruta/test', capacidad='100G')  # type: ignore
+    assert Usable.max_len['ruta'] == len('/ruta/test')
+    assert Usable.max_len['capacidad'] == len('capacidad')
+    assert Usable.instancias == 100
+
+
+def test_usable_sin_parametros():
+    Usable.instancias = 0
+    Usable.max_len = {}
+    Usable()  # type: ignore
+    assert Usable.max_len.get('ruta') is None
+    assert Usable.max_len.get('capacidad') is None
+    assert Usable.instancias == 0
+
+
+def test_usable_parametros_malos():
+    with pytest.raises(TypeError):
+        Usable(parametro='malo')  # type: ignore
 
 
 def test_reintentar_keyring_funciona():
     mock_func = MagicMock(return_value='password123')
-    func_decorada = reintentar_keyring()(mock_func)
+    func_decorada = reintentar_keyring()(mock_func)  # type: ignore
 
     resultado = func_decorada('servicio', 'usuario')
 
@@ -41,10 +66,7 @@ def test_reintentar_keyring_falla():
 
 
 def test_reintentar_keyring_fala_y_recupera():
-    mock_func = MagicMock(side_effect=[
-            Exception("InvalidObjectPath session error"),
-            'password123',
-            ])
+    mock_func = MagicMock(side_effect=[Exception("InvalidObjectPath session error"), 'password123', ])
     func_decorada = reintentar_keyring(intentos=3, espera=0)(mock_func)
 
     resultado = func_decorada('servicio', 'usuario')
@@ -584,3 +606,25 @@ def test_autorizame_error_lectura_fichero_almacen(almacen_valido):
         assert resultado[0] is False
         assert resultado[1] is None
         assert resultado[2] == EstadoApp.FICHERO_CORRUPTO
+
+
+def test_muestra_tabla(capsys):
+    lista = [Usable(ruta='/ruta/test', capacidad='100')] * 10  # type: ignore
+    muestra_tabla(lista)
+    captured = capsys.readouterr()
+
+    lineas = captured.out.strip().split('\n')
+    longitud_lineas = [len(l) for l in lineas]
+
+    assert len(set(longitud_lineas)) == 1
+    assert len(lineas) == len(lista) + 4
+
+    assert 'Codigo' in captured.out
+    assert 'Ruta' in captured.out
+    assert 'Capacidad' in captured.out
+
+
+def test_muestra_tabla_lista_vacia():
+    lista = []
+    with pytest.raises(ErrorApp):
+        muestra_tabla(lista)

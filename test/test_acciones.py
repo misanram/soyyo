@@ -175,7 +175,7 @@ def test_comprobar_estado_error_inesperado(almacen_valido, caplog):
         assert 'Error indeterminado en el proceso de comprobar_estado.' in mensajes[0]
 
 
-def test_reset_keyboard_interrupt(tmp_path, capsys):
+def test_reset_keyboard_interrupt(tmp_path):
     fichero = tmp_path / 'datos.json'
     with patch('soyyo.acciones.input', side_effect=KeyboardInterrupt):
         assert reset(fichero) == EstadoApp.SALIENDO_OK
@@ -188,7 +188,7 @@ def test_reset_NC(tmp_path, respuesta):
         assert reset(fichero) == EstadoApp.SALIENDO_OK
 
 
-def test_reset_otro_caracter(tmp_path, capsys):
+def test_reset_otro_caracter(tmp_path):
     fichero = tmp_path / 'datos.json'
     with patch('soyyo.acciones.input', side_effect=['^', 'C']):
         assert reset(fichero) == EstadoApp.SALIENDO_OK
@@ -233,7 +233,7 @@ def test_setup_sin_error(tmp_path):
         assert setup(fichero) == EstadoApp.SALIENDO_OK
 
 
-def test_setup_keyboard_interrupt(tmp_path, capsys):
+def test_setup_keyboard_interrupt(tmp_path):
     fichero = tmp_path / 'datos.json'
     with patch('soyyo.acciones.obtener_pin', side_effect=KeyboardInterrupt):
         assert setup(fichero) == EstadoApp.SALIENDO_OK
