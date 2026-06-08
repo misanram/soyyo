@@ -1,5 +1,17 @@
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
+
+
+@dataclass
+class Usable:
+    codigo: str
+    ruta: str
+    capacidad: str
+    max_len: dict
+    instancias: int
+
+    def __post_init__(self) -> None: ...
 
 
 def reintentar_keyring(intentos: int, espera: float) -> Callable: ...
@@ -24,3 +36,6 @@ def cargar_y_verificar_almacen(data_path: Path) -> dict: ...
 
 
 def autorizame(data_path: Path) -> tuple: ...
+
+
+def muestra_tabla(lista_datos: list) -> None: ...

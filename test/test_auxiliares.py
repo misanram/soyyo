@@ -73,7 +73,8 @@ def test_chek_keyring_funciona_bien():
         return pepper_almacenado.get((servicio, usuario))
 
     with (patch('soyyo.auxiliares.keyring.set_password', side_effect=_fake_set_password),
-          patch('soyyo.auxiliares.keyring.get_password', side_effect=_fake_get_password)):
+          patch('soyyo.auxiliares.keyring.get_password', side_effect=_fake_get_password),
+          patch('soyyo.auxiliares.keyring.delete_password')):
         assert check_keyring() is True
 
 
@@ -81,7 +82,8 @@ def test_chek_keyring_devuelve_cadena_incorrecta():
     """Keyring escribe, pero devuelve un valor inesperado"""
     # @formatter:off
     with (patch('soyyo.auxiliares.keyring.set_password'),
-          patch('soyyo.auxiliares.keyring.get_password', return_value='otra_cosa')):
+          patch('soyyo.auxiliares.keyring.get_password', return_value='otra_cosa'),
+          patch('soyyo.auxiliares.keyring.delete_password')):
         # @formatter:on
         assert check_keyring() is False
 
@@ -90,7 +92,8 @@ def test_chek_keyring_devuelve_none():
     """Keyring escribe, pero devuelve otro valor inesperado"""
     # @formatter:off
     with (patch('soyyo.auxiliares.keyring.set_password'),
-          patch('soyyo.auxiliares.keyring.get_password', return_value=None)):
+          patch('soyyo.auxiliares.keyring.get_password', return_value=None),
+          patch('soyyo.auxiliares.keyring.delete_password')):
         # @formatter:on
         assert check_keyring() is False
 
@@ -99,7 +102,8 @@ def test_chek_keyring_devuelve_cadena_vacia():
     """Keyring escribe, pero devuelve otro valor inesperado"""
     # @formatter:off
     with (patch('soyyo.auxiliares.keyring.set_password'),
-          patch('soyyo.auxiliares.keyring.get_password', return_value='')):
+          patch('soyyo.auxiliares.keyring.get_password', return_value=''),
+          patch('soyyo.auxiliares.keyring.delete_password')):
         # @formatter:on
         assert check_keyring() is False
 

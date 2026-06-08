@@ -11,19 +11,51 @@ import sys
 import termios
 import time
 import tty
+from dataclasses import dataclass, fields
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from string import digits
-from typing import Any
+from typing import Any, ClassVar
 
 import keyring
 import keyring.errors as keyring_errors
 
-from soyyo.constantes import EstadoApp, FirmaInvalidaError, PepperNotFoundError, TIEMPO_DE_BLOQUEO
+from soyyo.constantes import ErrorApp, EstadoApp, FirmaInvalidaError, PepperNotFoundError, TIEMPO_DE_BLOQUEO
 from soyyo.mensajes import (MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
                             MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS, MSG_FIRMA_INVALIDA, MSG_SIN_PEPPER)
 
 log = logging.getLogger(__name__)
+
+
+@dataclass
+class Usable:
+    """
+    Rutas usables
+    Esta clase se usa para almacenar las rutas en las que se peude grabar el fichero con la clave maestra
+    para poder resetear la apliación
+
+    max_len es un diccionario que contiene la longitud máxima del valor los atributos:
+        la clave es el nombre del atributo (ruta y longitud en este caso)
+        el valor es la longitud máxima del valor del atributo (es un literal) siendo el mínimo la longitud
+        del nombre del atributo (4 y 9 en este caso)
+    Este diccionario se usa para calcular las dimensiones de la tabla que se muestra en la selección de la
+    unidad a grabar la clave maestra.
+    """
+
+    codigo: str = ''
+    ruta: str = ''
+    capacidad: str = ''
+
+    max_len: ClassVar[dict] = {}
+    instancias: ClassVar[int] = 0
+
+    def __post_init__(self):
+        if self.ruta and self.capacidad:
+            Usable.instancias += 1
+            self.codigo = str(self.instancias)
+            for campo in fields(self):
+                valor = getattr(self, campo.name)
+                Usable.max_len[campo.name] = max(Usable.max_len.get(campo.name, len(campo.name)), len(valor))
 
 
 def reintentar_keyring(intentos=3, espera=0.2):
@@ -65,6 +97,7 @@ def check_keyring():
     try:
         keyring.set_password('test_service_name', 'test_username_', 'test_password')
         dato = keyring.get_password('test_service_name', 'test_username_')
+        keyring.delete_password('test_service_name', 'test_username_')
         return dato == 'test_password'
     except keyring_errors.NoKeyringError as error:
         log.exception('No hay keyring instalado en el sistema.')
@@ -314,3 +347,32 @@ def autorizame(data_path):
         log.exception("Fallo al escribir '%s': %s", data_path, error)
         print(MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS)
         return False, None, EstadoApp.FICHERO_CORRUPTO
+
+
+def muestra_tabla(lista_datos):
+    """
+    Muestra una bonita tabla con los campos del dataclass que se le pasa.
+    """
+
+    if not lista_datos:
+        raise ErrorApp
+
+    clase = lista_datos[0].__class__
+    tmp = {'id': max(len(str(clase.instancias)), 2)}
+    tmp.update(clase.max_len)
+
+    sep = '+'
+    sep += ''.join([f'{"-" * (_ + 2)}+' for _ in clase.max_len.values()])
+    tit = '|'
+    tit += ''.join([f' {campo.name.capitalize():^{clase.max_len[campo.name]}} |' for campo in fields(clase)])
+
+    print(sep)
+    print(tit)
+    print(sep)
+
+    for instancia in lista_datos:
+        linea = f'|'
+        linea += ''.join([f' {getattr(instancia, campo.name):<{clase.max_len[campo.name]}} |'
+                          for campo in fields(clase)])
+        print(linea)
+    print(sep)
