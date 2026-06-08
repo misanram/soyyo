@@ -20,8 +20,8 @@ from typing import Any
 import keyring
 import keyring.errors as keyring_errors
 
-from .constantes import (BaseTabla, ErrorApp, EstadoApp, FirmaInvalidaError, PepperNotFoundError,
-                         TIEMPO_DE_BLOQUEO)
+from .constantes import BaseTabla, EstadoApp, TIEMPO_DE_BLOQUEO
+from .errores import ErrorApp, FirmaInvalidaError, PepperNotFoundError
 from .mensajes import (MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
                        MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS, MSG_FIRMA_INVALIDA, MSG_SIN_PEPPER)
 

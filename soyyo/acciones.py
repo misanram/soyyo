@@ -27,7 +27,8 @@ from pyzbar.pyzbar import decode
 
 from .auxiliares import (autorizame, check_almacen, check_keyring, guardar_json, obtener_pin,
                          reintentar_keyring, )
-from .constantes import CapturaError, CURSORES, EstadoApp, FirmaInvalidaError, PepperNotFoundError, Zona
+from .constantes import CURSORES, EstadoApp, Zona
+from .errores import CapturaError, FirmaInvalidaError, PepperNotFoundError
 from .mensajes import (MSG_CABECERA, MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
                        MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_FICHERO_CORRUPTO, MSG_PROMPT_RESET,
                        MSG_RESET_REALIZADO, MSG_SETUP, MSG_SIN_PEPPER, MSG_TOTP_CAPTURADO, )

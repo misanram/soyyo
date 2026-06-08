@@ -14,7 +14,8 @@ import pytest
 from soyyo.auxiliares import (autorizame, cargar_y_verificar_almacen, check_almacen, check_keyring,
                               guardar_json, muestra_tabla, obtener_pin, reintentar_keyring, Usable,
                               validar_pin)
-from soyyo.constantes import BaseTabla, ErrorApp, EstadoApp, FirmaInvalidaError, PepperNotFoundError
+from soyyo.constantes import BaseTabla, EstadoApp
+from soyyo.errores import ErrorApp, FirmaInvalidaError, PepperNotFoundError
 from .fixtures import almacen_valido
 
 

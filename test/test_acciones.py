@@ -15,7 +15,8 @@ from PySide6.QtGui import QMouseEvent, QPaintEvent
 from PySide6.QtWidgets import QApplication
 
 from soyyo.acciones import captura, comprobar_estado, lista, reset, setup, VentanaCaptura
-from soyyo.constantes import CapturaError, CURSORES, EstadoApp, Zona
+from soyyo.constantes import CURSORES, EstadoApp, Zona
+from soyyo.errores import CapturaError
 from .fixtures import almacen_valido
 
 locale.setlocale(locale.LC_ALL, '')
