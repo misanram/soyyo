@@ -1,6 +1,7 @@
 """
 Definición de clases y costantes auxiliares (estados, errores, etc)
 """
+
 from dataclasses import dataclass, fields
 from enum import Enum
 from typing import ClassVar

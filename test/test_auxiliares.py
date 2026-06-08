@@ -28,12 +28,15 @@ def test_BaseTabla_OK_con_parametros():
         def _campos_requeridos(self):
             return ['campo1', 'campo2', 'campooo3']
 
-    test = MiClass(campo1='campo1', campo2='campo2', campooo3='campo3')  # type: ignore
+    for _ in range(5):
+        test = MiClass(campo1='valor_muy_largo', campo2='campo2', campooo3='campo3')  # type: ignore
 
-    assert test.campo1 == 'campo1'
-    assert MiClass.instancias == 1
+    assert MiClass.instancias == 5
+    assert MiClass.max_len['campo1'] == len('valor_muy_largo')
     assert MiClass.max_len['campo2'] == len('campo2')
     assert MiClass.max_len['campooo3'] == len('campooo3')
+    assert test.campo1 == 'valor_muy_largo'
+    assert test.codigo == '5'
 
 
 def test_BaseTabla_OK_sin_parametros():
@@ -63,7 +66,7 @@ def test_BaseTabla_TypeError():
     with pytest.raises(TypeError):
         test = MiClass(campo1='campo1', campo2='campo2')  # type: ignore
 
-        assert test.campo1 == 'campo1'
+        assert test.campo1 == 'campo1'  # type: ignore
 
 
 def test_BaseTabla_AttributeError():
@@ -88,7 +91,7 @@ def test_BaseTabla_NotImplementedError():
         campo2: str = ''
 
     with pytest.raises(NotImplementedError):
-        test = MiClass(campo1='campo1', campo2='campo2')  # type: ignore
+        MiClass(campo1='campo1', campo2='campo2')  # type: ignore
 
 
 def test_usable_max_len():
@@ -682,19 +685,29 @@ def test_autorizame_error_lectura_fichero_almacen(almacen_valido):
         assert resultado[2] == EstadoApp.FICHERO_CORRUPTO
 
 
-def test_muestra_tabla(capsys):
+@pytest.mark.parametrize('inicio, fin, longitud',
+                         [(0, 5, 1),
+                          (0, 0, 1),
+                          (5, 0, 1),
+                          (0, 5, 1),
+                          (None, None, 1),
+                          (0, 5, 10),
+                          (0, 0, 10),
+                          (5, 0, 10),
+                          (0, 5, 10),
+                          (None, None, 10)])
+def test_muestra_tabla(capsys, inicio, fin, longitud):
     lista = []
-    for _ in range(10):
+    for _ in range(longitud):
         lista.append(Usable(ruta='/ruta/test', capacidad='100'))  # type: ignore
-    muestra_tabla(lista)
+    muestra_tabla(lista, inicio, fin)
     captured = capsys.readouterr()
 
     lineas = captured.out.strip().split('\n')
     longitud_lineas = [len(l) for l in lineas]
 
     assert len(set(longitud_lineas)) == 1
-    assert len(lineas) == len(lista) + 4
-
+    assert len(lineas) == len(lista[inicio: fin]) + 4
     assert 'Codigo' in captured.out
     assert 'Ruta' in captured.out
     assert 'Capacidad' in captured.out
@@ -705,10 +718,10 @@ def test_muestra_tabla_lista_sin_dataclass():
     for _ in range(10):
         lista.append(_)
     with pytest.raises(ErrorApp):
-        muestra_tabla(lista)
+        muestra_tabla(lista, 0, 5)
 
 
 def test_muestra_tabla_lista_vacia():
     lista = []
     with pytest.raises(ErrorApp):
-        muestra_tabla(lista)
+        muestra_tabla(lista, 0, 5)

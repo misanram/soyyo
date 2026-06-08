@@ -25,12 +25,12 @@ from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 from pyzbar.pyzbar import decode
 
-from soyyo.auxiliares import (autorizame, check_almacen, check_keyring, guardar_json, obtener_pin,
-                              reintentar_keyring, )
-from soyyo.constantes import CapturaError, CURSORES, EstadoApp, FirmaInvalidaError, PepperNotFoundError, Zona
-from soyyo.mensajes import (MSG_CABECERA, MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
-                            MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_FICHERO_CORRUPTO, MSG_PROMPT_RESET,
-                            MSG_RESET_REALIZADO, MSG_SETUP, MSG_SIN_PEPPER, MSG_TOTP_CAPTURADO, )
+from .auxiliares import (autorizame, check_almacen, check_keyring, guardar_json, obtener_pin,
+                         reintentar_keyring, )
+from .constantes import CapturaError, CURSORES, EstadoApp, FirmaInvalidaError, PepperNotFoundError, Zona
+from .mensajes import (MSG_CABECERA, MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
+                       MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_FICHERO_CORRUPTO, MSG_PROMPT_RESET,
+                       MSG_RESET_REALIZADO, MSG_SETUP, MSG_SIN_PEPPER, MSG_TOTP_CAPTURADO, )
 
 BORDE = 8
 
@@ -38,7 +38,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
 
 log = logging.getLogger(__name__)
 
-keyring.get_password = reintentar_keyring()(keyring.get_password)
+keyring.get_password = reintentar_keyring()(keyring.get_password)  # type: ignore
 
 
 class VentanaCaptura(QWidget):

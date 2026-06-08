@@ -11,10 +11,10 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from soyyo.acciones import captura, comprobar_estado, lista, reset, setup
-from soyyo.constantes import EstadoApp
-from soyyo.mensajes import (MSG_ERROR_NO_CONTROLADO, MSG_FICHERO_CORRUPTO, MSG_FIRMA_INVALIDA,
-                            MSG_SALIENDO_ERROR, MSG_SALIENDO_OK, MSG_SIN_KEYRING, MSG_SIN_PEPPER, )
+from .acciones import captura, comprobar_estado, lista, reset, setup
+from .constantes import EstadoApp
+from .mensajes import (MSG_ERROR_NO_CONTROLADO, MSG_FICHERO_CORRUPTO, MSG_FIRMA_INVALIDA,
+                       MSG_SALIENDO_ERROR, MSG_SALIENDO_OK, MSG_SIN_KEYRING, MSG_SIN_PEPPER, )
 
 locale.setlocale(locale.LC_ALL, '')
 

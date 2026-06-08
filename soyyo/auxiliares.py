@@ -20,10 +20,10 @@ from typing import Any
 import keyring
 import keyring.errors as keyring_errors
 
-from soyyo.constantes import (BaseTabla, ErrorApp, EstadoApp, FirmaInvalidaError, PepperNotFoundError,
-                              TIEMPO_DE_BLOQUEO)
-from soyyo.mensajes import (MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
-                            MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS, MSG_FIRMA_INVALIDA, MSG_SIN_PEPPER)
+from .constantes import (BaseTabla, ErrorApp, EstadoApp, FirmaInvalidaError, PepperNotFoundError,
+                         TIEMPO_DE_BLOQUEO)
+from .mensajes import (MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
+                       MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS, MSG_FIRMA_INVALIDA, MSG_SIN_PEPPER)
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class Usable(BaseTabla):
     """
     Rutas usables
     Esta clase se usa para almacenar las rutas en las que se peude grabar el fichero con la clave maestra
-    para poder resetear la apliación
+    para poder resetear la aplicación
 
     max_len es un diccionario que contiene la longitud máxima del valor los atributos:
         la clave es el nombre del atributo (ruta y longitud en este caso)
@@ -107,7 +107,7 @@ def check_almacen(data_path):
 
 def obtener_pin(prompt_head, setup=True):
     """
-    Esta función está diseñada àra capturar datatos para la app
+    Esta función está diseñada para capturar datos para la app
     Captura una entrada y la valida.
     Pasos:
         Crea una cadena de texto que usa como prompt
@@ -341,7 +341,7 @@ def autorizame(data_path):
         return False, None, EstadoApp.FICHERO_CORRUPTO
 
 
-def muestra_tabla(lista_datos):
+def muestra_tabla(lista_datos, inicio=0, fin=5):
     """
     Muestra una bonita tabla con los campos del dataclass que se le pasa.
     """
@@ -368,11 +368,12 @@ def muestra_tabla(lista_datos):
         print(sep)
         print(tit)
         print(sep)
-        for instancia in lista_datos:
+        for instancia in lista_datos[inicio:fin]:
             linea = f'|'
             linea += ''.join([f' {getattr(instancia, campo.name):<{clase.max_len[campo.name]}} |'
                               for campo in fields(clase)])
             print(linea)
         print(sep)
+
     except Exception:
         raise
