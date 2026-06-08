@@ -11,16 +11,17 @@ import sys
 import termios
 import time
 import tty
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, is_dataclass
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from string import digits
-from typing import Any, ClassVar
+from typing import Any
 
 import keyring
 import keyring.errors as keyring_errors
 
-from soyyo.constantes import ErrorApp, EstadoApp, FirmaInvalidaError, PepperNotFoundError, TIEMPO_DE_BLOQUEO
+from soyyo.constantes import (BaseTabla, ErrorApp, EstadoApp, FirmaInvalidaError, PepperNotFoundError,
+                              TIEMPO_DE_BLOQUEO)
 from soyyo.mensajes import (MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
                             MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS, MSG_FIRMA_INVALIDA, MSG_SIN_PEPPER)
 
@@ -28,7 +29,7 @@ log = logging.getLogger(__name__)
 
 
 @dataclass
-class Usable:
+class Usable(BaseTabla):
     """
     Rutas usables
     Esta clase se usa para almacenar las rutas en las que se peude grabar el fichero con la clave maestra
@@ -42,20 +43,11 @@ class Usable:
     unidad a grabar la clave maestra.
     """
 
-    codigo: str = ''
     ruta: str = ''
     capacidad: str = ''
 
-    max_len: ClassVar[dict] = {}
-    instancias: ClassVar[int] = 0
-
-    def __post_init__(self):
-        if self.ruta and self.capacidad:
-            Usable.instancias += 1
-            self.codigo = str(self.instancias)
-            for campo in fields(self):
-                valor = getattr(self, campo.name)
-                Usable.max_len[campo.name] = max(Usable.max_len.get(campo.name, len(campo.name)), len(valor))
+    def _campos_requeridos(self):
+        return ['ruta', 'capacidad']
 
 
 def reintentar_keyring(intentos=3, espera=0.2):
@@ -355,24 +347,32 @@ def muestra_tabla(lista_datos):
     """
 
     if not lista_datos:
+        log.warning('Lista vacia')
         raise ErrorApp
 
-    clase = lista_datos[0].__class__
-    tmp = {'id': max(len(str(clase.instancias)), 2)}
-    tmp.update(clase.max_len)
+    try:
+        clase = lista_datos[0].__class__
+        if not is_dataclass(clase):
+            log.warning('Lista sin dataclass')
+            raise ErrorApp
 
-    sep = '+'
-    sep += ''.join([f'{"-" * (_ + 2)}+' for _ in clase.max_len.values()])
-    tit = '|'
-    tit += ''.join([f' {campo.name.capitalize():^{clase.max_len[campo.name]}} |' for campo in fields(clase)])
+        tmp = {'id': max(len(str(clase.instancias)), 2)}
+        tmp.update(clase.max_len)
 
-    print(sep)
-    print(tit)
-    print(sep)
+        sep = '+'
+        sep += ''.join([f'{"-" * (_ + 2)}+' for _ in clase.max_len.values()])
+        tit = '|'
+        tit += ''.join(
+                [f' {campo.name.capitalize():^{clase.max_len[campo.name]}} |' for campo in fields(clase)])
 
-    for instancia in lista_datos:
-        linea = f'|'
-        linea += ''.join([f' {getattr(instancia, campo.name):<{clase.max_len[campo.name]}} |'
-                          for campo in fields(clase)])
-        print(linea)
-    print(sep)
+        print(sep)
+        print(tit)
+        print(sep)
+        for instancia in lista_datos:
+            linea = f'|'
+            linea += ''.join([f' {getattr(instancia, campo.name):<{clase.max_len[campo.name]}} |'
+                              for campo in fields(clase)])
+            print(linea)
+        print(sep)
+    except Exception:
+        raise

@@ -8,10 +8,8 @@ class Usable:
     codigo: str
     ruta: str
     capacidad: str
-    max_len: dict
-    instancias: int
 
-    def __post_init__(self) -> None: ...
+    def _campos_requeridos(self) -> list: ...
 
 
 def reintentar_keyring(intentos: int, espera: float) -> Callable: ...

@@ -4,6 +4,7 @@ Tests del módulo auxiliares.py
 
 import json
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,8 +14,81 @@ import pytest
 from soyyo.auxiliares import (autorizame, cargar_y_verificar_almacen, check_almacen, check_keyring,
                               guardar_json, muestra_tabla, obtener_pin, reintentar_keyring, Usable,
                               validar_pin)
-from soyyo.constantes import ErrorApp, EstadoApp, FirmaInvalidaError, PepperNotFoundError
+from soyyo.constantes import BaseTabla, ErrorApp, EstadoApp, FirmaInvalidaError, PepperNotFoundError
 from .fixtures import almacen_valido
+
+
+def test_BaseTabla_OK_con_parametros():
+    @dataclass
+    class MiClass(BaseTabla):
+        campo1: str = ''
+        campo2: str = ''
+        campooo3: str = ''
+
+        def _campos_requeridos(self):
+            return ['campo1', 'campo2', 'campooo3']
+
+    test = MiClass(campo1='campo1', campo2='campo2', campooo3='campo3')  # type: ignore
+
+    assert test.campo1 == 'campo1'
+    assert MiClass.instancias == 1
+    assert MiClass.max_len['campo2'] == len('campo2')
+    assert MiClass.max_len['campooo3'] == len('campooo3')
+
+
+def test_BaseTabla_OK_sin_parametros():
+    @dataclass
+    class MiClass(BaseTabla):
+        campo1: str = ''
+        campo2: str = ''
+
+        def _campos_requeridos(self):
+            return ['campo1', 'campo2']
+
+    test = MiClass()  # type: ignore
+
+    assert test.campo1 == ''
+    assert MiClass.instancias == 0
+
+
+def test_BaseTabla_TypeError():
+    @dataclass
+    class MiClass(BaseTabla):
+        campo0: str = ''
+        campo2: str = ''
+
+        def _campos_requeridos(self):
+            return ['campo1', 'campo2']
+
+    with pytest.raises(TypeError):
+        test = MiClass(campo1='campo1', campo2='campo2')  # type: ignore
+
+        assert test.campo1 == 'campo1'
+
+
+def test_BaseTabla_AttributeError():
+    @dataclass
+    class MiClass(BaseTabla):
+        campo1: str = ''
+        campo2: str = ''
+
+        def _campos_requeridos(self):
+            return ['campo0', 'campo2']
+
+    with pytest.raises(AttributeError):
+        test = MiClass(campo1='campo1', campo2='campo2')  # type: ignore
+
+        assert test.campo1 == 'campo1'
+
+
+def test_BaseTabla_NotImplementedError():
+    @dataclass
+    class MiClass(BaseTabla):
+        campo1: str = ''
+        campo2: str = ''
+
+    with pytest.raises(NotImplementedError):
+        test = MiClass(campo1='campo1', campo2='campo2')  # type: ignore
 
 
 def test_usable_max_len():
@@ -609,7 +683,9 @@ def test_autorizame_error_lectura_fichero_almacen(almacen_valido):
 
 
 def test_muestra_tabla(capsys):
-    lista = [Usable(ruta='/ruta/test', capacidad='100')] * 10  # type: ignore
+    lista = []
+    for _ in range(10):
+        lista.append(Usable(ruta='/ruta/test', capacidad='100'))  # type: ignore
     muestra_tabla(lista)
     captured = capsys.readouterr()
 
@@ -622,6 +698,14 @@ def test_muestra_tabla(capsys):
     assert 'Codigo' in captured.out
     assert 'Ruta' in captured.out
     assert 'Capacidad' in captured.out
+
+
+def test_muestra_tabla_lista_sin_dataclass():
+    lista = []
+    for _ in range(10):
+        lista.append(_)
+    with pytest.raises(ErrorApp):
+        muestra_tabla(lista)
 
 
 def test_muestra_tabla_lista_vacia():

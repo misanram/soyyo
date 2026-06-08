@@ -1,4 +1,6 @@
+from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 from PySide6.QtCore import Qt
 
@@ -15,6 +17,20 @@ class EstadoApp(Enum):
     AUTORIZADO = ...
 
     def __str__(self) -> str: ...
+
+
+@dataclass
+class BaseTabla:
+    codigo: str
+    max_len: dict
+    instancias: int
+
+    def _campos_requeridos(self) -> list: ...
+
+    def __post_init__(self) -> None: ...
+
+    @classmethod
+    def __init_subclass__(cls, **kwargs: Any) -> None: ...
 
 
 class Zona(Enum):

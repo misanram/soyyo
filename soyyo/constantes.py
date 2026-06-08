@@ -1,8 +1,9 @@
 """
 Definición de clases y costantes auxiliares (estados, errores, etc)
 """
-
+from dataclasses import dataclass, fields
 from enum import Enum
+from typing import ClassVar
 
 from PySide6.QtCore import Qt
 
@@ -40,6 +41,48 @@ class Zona(Enum):
     BORDE_DERECHO = 'borde_derecho'
     BARRA = 'barra'
     INTERIOR = 'interior'
+
+
+@dataclass
+class BaseTabla:
+    """
+    Esta clase se usa para almacenar los datos que se van a emplear en algunas tablas que se muestran en la
+    app.
+
+    max_len es un diccionario que contiene la longitud máxima del valor los atributos:
+        la clave es el nombre del atributo (ruta y longitud en este caso)
+        el valor es la longitud máxima del valor del atributo (es un literal) siendo el mínimo la longitud
+        del nombre del atributo (4 y 9 en este caso)
+    Este diccionario se usa para calcular las dimensiones de la tabla que se muestra en la selección de la
+    unidad a grabar la clave maestra.
+    El método _campos_requeridos debe ser sobreescrito para que la clase funcione.
+    """
+
+    codigo: str = ''
+    max_len: ClassVar[dict] = {}
+    instancias: ClassVar[int] = 0
+
+    def __post_init__(self):
+        clase = type(self)
+        if all(getattr(self, c) for c in self._campos_requeridos()):
+            clase.instancias += 1  # instancias de la subclase, no de la base
+            self.codigo = str(clase.instancias)
+            for campo in fields(self):
+                valor = getattr(self, campo.name)
+                clase.max_len[campo.name] = max(clase.max_len.get(campo.name, len(campo.name)), len(valor))
+
+    @classmethod
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls.max_len = {}
+        cls.instancias = 0
+
+    def _campos_requeridos(self) -> list:
+        """
+        Cada subclase debe sobreescribir este método y definir qué campos deben tener valor.
+        """
+
+        raise NotImplementedError
 
 
 class ErrorApp(Exception):
