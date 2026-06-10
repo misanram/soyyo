@@ -6,16 +6,17 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import call, MagicMock, patch
 
 import keyring.errors as keyring_errors
 import pytest
 
-from soyyo.auxiliares import (autorizame, cargar_y_verificar_almacen, check_almacen, check_keyring,
-                              guardar_json, muestra_tabla, obtener_pin, reintentar_keyring, Usable,
+from soyyo.auxiliares import (autorizame, captura_teclado, cargar_y_verificar_almacen, check_almacen,
+                              check_keyring, detectar_usb, guardar_json, muestra_tabla, reintentar_keyring,
+                              selecciona_ruta, Usable,
                               validar_pin)
 from soyyo.constantes import BaseTabla, EstadoApp
-from soyyo.errores import ErrorApp, FirmaInvalidaError, PepperNotFoundError
+from soyyo.errores import AppError, FirmaInvalidaError, PepperNotFoundError
 from .fixtures import almacen_valido
 
 
@@ -225,8 +226,42 @@ def test_chek_almacen_no_existe(tmp_path):
     assert check_almacen(fichero) is False
 
 
-@pytest.mark.parametrize('setup', [True, False])
-def test_obtener_pin_pin_valido_salto_de_linea(setup):
+@pytest.mark.parametrize('una_tecla, setup, pin, dispara',
+                         [(True, False, False, 'x'),
+                          (False, True, False, 'x'),
+                          (True, True, False, 'x'),
+                          (False, False, True, 'x'),
+                          (True, False, True, 'x'),
+                          (False, True, True, 'x'),
+                          (True, True, True, 'x'),
+                          (True, True, False, ''),
+                          (True, False, True, ''),
+                          (False, True, True, ''),
+                          (True, True, True, '')])
+def test_captura_teclado_muchos_parametros(una_tecla, setup, pin, dispara):
+    with pytest.raises(TypeError):
+        captura_teclado(una_tecla=una_tecla, setup=setup, pin=pin, dispara=dispara)
+
+
+def test_captura_teclado_dispara():
+    teclas = [b'x', b'a']
+    # @formatter:off
+    with (patch('termios.tcgetattr', return_value=[]),
+          patch('termios.tcsetattr'),
+          patch('tty.setraw'),
+          patch('sys.stdin.buffer.read', side_effect=teclas),
+          patch('sys.stdin.fileno', return_value=0)):
+        # @formatter:on
+        resultado = captura_teclado(dispara='x')
+    assert resultado == bytearray(b'x')
+
+
+@pytest.mark.parametrize('setup, pin',
+                         [(False, False),
+                          (True, False),
+                          (False, True),
+                          (False, False)])
+def test_captura_teclado_pin_valido_salto_de_linea(setup, pin):
     teclas = [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\n']
     # @formatter:off
     with (patch('termios.tcgetattr', return_value=[]),
@@ -235,12 +270,16 @@ def test_obtener_pin_pin_valido_salto_de_linea(setup):
           patch('sys.stdin.buffer.read', side_effect=teclas),
           patch('sys.stdin.fileno', return_value=0)):
         # @formatter:on
-        resultado = obtener_pin('PIN: ', setup)
+        resultado = captura_teclado(setup=setup, pin=pin)
     assert resultado == bytearray(b'12345678')
 
 
-@pytest.mark.parametrize('setup', [True, False])
-def test_obtener_pin_pin_valido_retorno_de_carro(setup):
+@pytest.mark.parametrize('setup, pin',
+                         [(False, False),
+                          (True, False),
+                          (False, True),
+                          (False, False)])
+def test_captura_teclado_pin_valido_retorno_de_carro(setup, pin):
     teclas = [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\r']
     # @formatter:off
     with (patch('termios.tcgetattr', return_value=[]),
@@ -249,12 +288,16 @@ def test_obtener_pin_pin_valido_retorno_de_carro(setup):
           patch('sys.stdin.buffer.read', side_effect=teclas),
           patch('sys.stdin.fileno', return_value=0)):
         # @formatter:on
-        resultado = obtener_pin('PIN: ', setup)
+        resultado = captura_teclado(setup=setup, pin=pin)
     assert resultado == bytearray(b'12345678')
 
 
-@pytest.mark.parametrize('setup', [True, False])
-def test_obtener_pin_pin_valido_backspace(setup):
+@pytest.mark.parametrize('una_tecla, setup, pin',
+                         [(True, False, False),
+                          (False, True, False),
+                          (False, False, True),
+                          (False, False, False)])
+def test_captura_teclado_pin_valido_backspace(una_tecla, setup, pin):
     teclas = [b'1', b'2', b'3', b'3', b'\x7f', b'4', b'5', b'6', b'7', b'8', b'\r']
     # @formatter:off
     with (patch('termios.tcgetattr', return_value=[]),
@@ -263,12 +306,19 @@ def test_obtener_pin_pin_valido_backspace(setup):
           patch('sys.stdin.buffer.read', side_effect=teclas),
           patch('sys.stdin.fileno', return_value=0)):
         # @formatter:on
-        resultado = obtener_pin('PIN: ', setup)
-    assert resultado == bytearray(b'12345678')
+        resultado = captura_teclado(una_tecla=una_tecla, setup=setup, pin=pin)
+    if not una_tecla:
+        assert resultado == bytearray(b'12345678')
+    else:
+        assert resultado == bytearray()
 
 
-@pytest.mark.parametrize('setup', [True, False])
-def test_obtener_pin_pin_valido_backspace_inicio(setup):
+@pytest.mark.parametrize('una_tecla, setup, pin',
+                         [(True, False, False),
+                          (False, True, False),
+                          (False, False, True),
+                          (False, False, False)])
+def test_captura_teclado_pin_valido_backspace_inicio(una_tecla, setup, pin):
     teclas = [b'\x7f', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\r']
     # @formatter:off
     with (patch('termios.tcgetattr', return_value=[]),
@@ -277,12 +327,19 @@ def test_obtener_pin_pin_valido_backspace_inicio(setup):
           patch('sys.stdin.buffer.read', side_effect=teclas),
           patch('sys.stdin.fileno', return_value=0)):
         # @formatter:on
-        resultado = obtener_pin('PIN: ', setup)
-    assert resultado == bytearray(b'12345678')
+        resultado = captura_teclado(una_tecla=una_tecla, setup=setup, pin=pin)
+    if not una_tecla:
+        assert resultado == bytearray(b'12345678')
+    else:
+        assert resultado == bytearray()
 
 
-@pytest.mark.parametrize('setup', [True, False])
-def test_obtener_pin_pin_valido_caracter_no_ascii(setup):
+@pytest.mark.parametrize('una_tecla, setup, pin',
+                         [(True, False, False),
+                          (False, True, False),
+                          (False, False, True),
+                          (False, False, False)])
+def test_captura_teclado_pin_valido_caracter_no_ascii(una_tecla, setup, pin):
     teclas = [b'\xc3', b'\xa9',  # primer byte de 'é' y segundo byte de 'é'
               b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\r']
     # @formatter:off
@@ -292,14 +349,18 @@ def test_obtener_pin_pin_valido_caracter_no_ascii(setup):
           patch('sys.stdin.buffer.read', side_effect=teclas),
           patch('sys.stdin.fileno', return_value=0)):
         # @formatter:on
-        resultado = obtener_pin('PIN: ', setup)
-    assert resultado == bytearray(b'12345678')
+        resultado = captura_teclado(una_tecla=una_tecla, setup=setup, pin=pin)
+    if not una_tecla:
+        assert resultado == bytearray(b'12345678')
+    else:
+        assert resultado == bytearray()
 
 
-@pytest.mark.parametrize('setup, respuesta',
-                         [(True, '\nEl PIN debe tener entre 8 y 20 cifras.\n'),
-                          (False, '')])
-def test_obtener_pin_pin_corto(capsys, setup, respuesta):
+@pytest.mark.parametrize('setup, pin, respuesta',
+                         [(True, False, 'El PIN debe tener entre 8 y 20 cifras'),
+                          (False, True, ''),
+                          (False, False, '')])
+def test_captura_teclado_pin_corto(capsys, setup, pin, respuesta):
     teclas = [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'\r', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8',
               b'\r']
     # @formatter:off
@@ -309,7 +370,7 @@ def test_obtener_pin_pin_corto(capsys, setup, respuesta):
           patch('sys.stdin.buffer.read', side_effect=teclas),
           patch('sys.stdin.fileno', return_value=0)):
         # @formatter:on
-        resultado = obtener_pin('PIN: ', setup)
+        resultado = captura_teclado(setup=setup, pin=pin)
         captured = capsys.readouterr()
     assert respuesta in captured.out
     if setup:
@@ -318,10 +379,11 @@ def test_obtener_pin_pin_corto(capsys, setup, respuesta):
         assert resultado == bytearray(b'1234567')
 
 
-@pytest.mark.parametrize('setup, respuesta',
-                         [(True, '\nEl PIN debe tener entre 8 y 20 cifras.\n'),
-                          (False, '')])
-def test_obtener_pin_pin_vacio(capsys, setup, respuesta):
+@pytest.mark.parametrize('setup, pin, respuesta',
+                         [(True, False, 'El PIN debe tener entre 8 y 20 cifras'),
+                          (False, True, ''),
+                          (False, False, '')])
+def test_captura_teclado_pin_vacio(capsys, setup, pin, respuesta):
     teclas = [b'\r', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\r']
     # @formatter:off
     with (patch('termios.tcgetattr', return_value=[]),
@@ -330,7 +392,7 @@ def test_obtener_pin_pin_vacio(capsys, setup, respuesta):
           patch('sys.stdin.buffer.read', side_effect=teclas),
           patch('sys.stdin.fileno', return_value=0)):
         # @formatter:on
-        resultado = obtener_pin('PIN: ', setup)
+        resultado = captura_teclado(setup=setup, pin=pin)
         captured = capsys.readouterr()
     assert respuesta in captured.out
     if setup:
@@ -339,10 +401,10 @@ def test_obtener_pin_pin_vacio(capsys, setup, respuesta):
         assert resultado == bytearray(b'')
 
 
-@pytest.mark.parametrize('setup, respuesta',
-                         [(True, '\nEl PIN debe tener entre 8 y 20 cifras.\n'),
-                          (False, '')])
-def test_obtener_pin_pin_largo(capsys, setup, respuesta):
+@pytest.mark.parametrize('setup, pin, respuesta',
+                         [(True, False, 'El PIN debe tener entre 8 y 20 cifras'),
+                          (False, False, ''), (False, False, '')])
+def test_captura_teclado_pin_largo(capsys, setup, pin, respuesta):
     teclas = [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'0', b'1', b'2', b'3', b'4', b'5', b'6',
               b'7', b'8', b'9', b'0', b'1', b'2', b'3', b'4', b'\r', b'1', b'2', b'3', b'4', b'5', b'6', b'7',
               b'8', b'\r']
@@ -353,7 +415,7 @@ def test_obtener_pin_pin_largo(capsys, setup, respuesta):
           patch('sys.stdin.buffer.read', side_effect=teclas),
           patch('sys.stdin.fileno', return_value=0)):
         # @formatter:on
-        resultado = obtener_pin('PIN: ', setup)
+        resultado = captura_teclado(setup=setup, pin=pin)
         captured = capsys.readouterr()
     assert respuesta in captured.out
     if setup:
@@ -362,8 +424,12 @@ def test_obtener_pin_pin_largo(capsys, setup, respuesta):
         assert resultado == bytearray(b'123456789012345678901234')
 
 
-@pytest.mark.parametrize('setup', [True, False])
-def test_obtener_pin_keyboard_interrupt(setup):
+@pytest.mark.parametrize('una_tecla, setup, pin',
+                         [(True, False, False),
+                          (False, True, False),
+                          (False, False, True),
+                          (False, False, False)])
+def test_captura_teclado_keyboard_interrupt(una_tecla, setup, pin):
     # @formatter:off
     with (patch('termios.tcgetattr', return_value=[]),
           patch('termios.tcsetattr'),
@@ -372,11 +438,13 @@ def test_obtener_pin_keyboard_interrupt(setup):
           patch('sys.stdin.fileno', return_value=0)):
         # @formatter:on
         with pytest.raises(KeyboardInterrupt):
-            obtener_pin('PIN: ', setup)
+            captura_teclado(una_tecla=una_tecla, setup=setup, pin=pin)
 
 
-@pytest.mark.parametrize('setup', [True, False])
-def test_obtener_pin_keyboard_interrupt_caracter(setup):
+@pytest.mark.parametrize('una_tecla, setup, pin',
+                         [(True, False, False), (False, True, False), (False, False, True),
+                          (False, False, False)])
+def test_captura_teclado_keyboard_interrupt_caracter(una_tecla, setup, pin):
     teclas = [b'\x03']
     # @formatter:off
     with (patch('termios.tcgetattr', return_value=[]),
@@ -385,12 +453,18 @@ def test_obtener_pin_keyboard_interrupt_caracter(setup):
           patch('sys.stdin.buffer.read', side_effect=teclas),
           patch('sys.stdin.fileno', return_value=0)):
         # @formatter:on
-        with pytest.raises(KeyboardInterrupt):
-            obtener_pin('PIN: ', setup)
+        if not una_tecla:
+            with pytest.raises(KeyboardInterrupt):
+                captura_teclado(una_tecla=una_tecla, setup=setup, pin=pin)
+        else:
+            data = captura_teclado(una_tecla=una_tecla, setup=setup, pin=pin)
+            assert data == bytearray()
 
 
-@pytest.mark.parametrize('setup', [True, False])
-def test_caracter_invalido_genera_bell(setup):
+@pytest.mark.parametrize(',una_tecla, setup, pin',
+                         [(True, False, False), (False, True, False), (False, False, True),
+                          (False, False, False)])
+def test_caracter_invalido_genera_bell(una_tecla, setup, pin):
     teclas = [b'z', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'\r']
     # @formatter:off
     with (patch('termios.tcgetattr', return_value=[]),
@@ -400,9 +474,12 @@ def test_caracter_invalido_genera_bell(setup):
           patch('sys.stdin.fileno', return_value=0),
           patch('sys.stdout.write') as mock_write):
         # @formatter:on
-        obtener_pin('PIN: ', setup)
+        data = captura_teclado(una_tecla=una_tecla, setup=setup, pin=pin)
         llamadas = [args[0] for args, kwargs in mock_write.call_args_list]
-        assert '\x07' in llamadas
+        if not una_tecla:
+            assert '\x07' in llamadas
+        else:
+            assert data == bytearray()
 
 
 def test_validar_pin(almacen_valido):
@@ -528,7 +605,7 @@ def test_autorizame_ok(almacen_valido):
     fichero, pepper = almacen_valido()
     pin = bytearray(b'12345678')
     # @formatter:off
-    with (patch('soyyo.auxiliares.obtener_pin', return_value=pin),
+    with (patch('soyyo.auxiliares.captura_teclado', return_value=pin),
           patch('soyyo.auxiliares.keyring.get_password',return_value=pepper)):
         # @formatter:on
         resultado = autorizame(fichero)
@@ -541,7 +618,7 @@ def test_autorizame_bloqueo_temporal_finalizado(almacen_valido):
     fichero, pepper = almacen_valido(minutos_bloqueo=-10000)
     pin = bytearray(b'12345678')
     # @formatter:off
-    with (patch('soyyo.auxiliares.obtener_pin', return_value=pin),
+    with (patch('soyyo.auxiliares.captura_teclado', return_value=pin),
           patch('soyyo.auxiliares.keyring.get_password',return_value=pepper)):
         # @formatter:on
         resultado = autorizame(fichero)
@@ -554,7 +631,7 @@ def test_autorizame_bloqueo_temporal(almacen_valido, caplog):
     fichero, pepper = almacen_valido(minutos_bloqueo=10000)
     pin = bytearray(b'12345678')
     # @formatter:off
-    with (patch('soyyo.auxiliares.obtener_pin', return_value=pin),
+    with (patch('soyyo.auxiliares.captura_teclado', return_value=pin),
           patch('soyyo.auxiliares.keyring.get_password',return_value=pepper),
           caplog.at_level(logging.INFO)):
         # @formatter:onº
@@ -570,7 +647,7 @@ def test_autorizame_bloqueo_permanente(almacen_valido, caplog):
     fichero, pepper = almacen_valido(num_bloqueos=10)
     pin = bytearray(b'12345678')
     # @formatter:off
-    with (patch('soyyo.auxiliares.obtener_pin', return_value=pin),
+    with (patch('soyyo.auxiliares.captura_teclado', return_value=pin),
           patch('soyyo.auxiliares.keyring.get_password',return_value=pepper),
           caplog.at_level(logging.INFO)):
         # @formatter:on
@@ -592,7 +669,7 @@ def test_autorizame_bloqueo_permanente(almacen_valido, caplog):
 def test_autorizame_KeyboardInterrupt(almacen_valido, caplog, pins, intentos_fallidos):
     fichero, pepper = almacen_valido()
     # @formatter:off
-    with (patch('soyyo.auxiliares.obtener_pin', side_effect=pins),
+    with (patch('soyyo.auxiliares.captura_teclado', side_effect=pins),
           patch('soyyo.auxiliares.keyring.get_password',return_value=pepper),
           caplog.at_level(logging.DEBUG)):
         # @formatter:on
@@ -627,10 +704,10 @@ def test_autorizame_KeyboardInterrupt(almacen_valido, caplog, pins, intentos_fal
                           ([bytearray(b'00000000'), bytearray(b'00000000'), bytearray(b'00000000')], 3),  # falla 3 veces
                           ])
 # @formatter:on
-def test_autorizame_intentos(almacen_valido, caplog, pins, intentos_fallidos):
+def test_autorizame_varios_intentos(almacen_valido, caplog, pins, intentos_fallidos):
     fichero, pepper = almacen_valido()
     # @formatter:off
-    with (patch('soyyo.auxiliares.obtener_pin', side_effect=pins),
+    with (patch('soyyo.auxiliares.captura_teclado', side_effect=pins),
           patch('soyyo.auxiliares.keyring.get_password', return_value=pepper),
           caplog.at_level(logging.DEBUG)):
         # @formatter:on
@@ -663,7 +740,7 @@ def test_autorizame_pepper_not_found(almacen_valido):
     fichero, pepper = almacen_valido()
     pin = bytearray(b'12345678')
     # @formatter:off
-    with (patch('soyyo.auxiliares.obtener_pin', return_value=pin),
+    with (patch('soyyo.auxiliares.captura_teclado', return_value=pin),
           patch('soyyo.auxiliares.keyring.get_password',return_value=None)):
         # @formatter:on
         resultado = autorizame(fichero)
@@ -677,7 +754,7 @@ def test_autorizame_error_lectura_fichero_almacen(almacen_valido):
     pin = bytearray(b'12345678')
     fichero = Path('/noexiste')
     # @formatter:off
-    with (patch('soyyo.auxiliares.obtener_pin', return_value=pin),
+    with (patch('soyyo.auxiliares.captura_teclado', return_value=pin),
           patch('soyyo.auxiliares.keyring.get_password',return_value=pepper)):
         # @formatter:on
         resultado = autorizame(fichero)
@@ -714,15 +791,96 @@ def test_muestra_tabla(capsys, inicio, fin, longitud):
     assert 'Capacidad' in captured.out
 
 
+def test_detectar_usb():
+    mock_resultado = MagicMock(returncode=0,
+                               stdout='''{"blockdevices": [{"children": [{"mountpoint": 
+                               "/Directorio/que/vale","size": "22,2G"}]}]}''')
+    with (patch('soyyo.auxiliares.subprocess.run', return_value=mock_resultado),
+          patch('soyyo.auxiliares.os.access', return_value=True)):
+        resultado = detectar_usb()
+        assert len(resultado) == 1
+
+
+def test_detectar_usb_sin_rutas():
+    mock_resultado = MagicMock(returncode=0, stdout='{"blockdevices": [{"children": []}]}')
+    with (patch('soyyo.auxiliares.subprocess.run', return_value=mock_resultado),
+          patch('soyyo.auxiliares.os.access', return_value=True)):
+        resultado = detectar_usb()
+        assert len(resultado) == 0
+
+
+def test_detectar_usb_sin_dispositivos():
+    mock_resultado = MagicMock(returncode=0, stdout='{"blockdevices":[]}')
+    with (patch('soyyo.auxiliares.subprocess.run', return_value=mock_resultado),
+          patch('soyyo.auxiliares.os.access', return_value=True)):
+        resultado = detectar_usb()
+        assert len(resultado) == 0
+
+
+def test_detectar_usb_error():
+    mock_resultado = MagicMock(returncode=1)
+    with patch('soyyo.auxiliares.subprocess.run', return_value=mock_resultado):
+        with pytest.raises(Exception):
+            detectar_usb()
+
+
 def test_muestra_tabla_lista_sin_dataclass():
     lista = []
     for _ in range(10):
         lista.append(_)
-    with pytest.raises(ErrorApp):
+    with pytest.raises(AppError):
         muestra_tabla(lista, 0, 5)
 
 
 def test_muestra_tabla_lista_vacia():
     lista = []
-    with pytest.raises(ErrorApp):
+    with pytest.raises(AppError):
         muestra_tabla(lista, 0, 5)
+
+
+def test_selecciona_ruta_sin_dispositivo():
+    with patch('soyyo.auxiliares.detectar_usb', return_value=[]):
+        resultado = selecciona_ruta()
+        assert resultado == ''
+
+
+def test_selecciona_ruta_seleccion_OK():
+    with (patch('soyyo.auxiliares.detectar_usb', return_value=[1, 2, 3, 4, 5, 6, 7, 8]),
+          patch('soyyo.auxiliares.muestra_tabla'),
+          patch('soyyo.auxiliares.captura_teclado', side_effect=[b'22', b'5'])):
+        resultado = selecciona_ruta()
+        assert resultado == 5
+
+
+def test_selecciona_ruta_mueve_paginas():
+    funcion_mockeada = MagicMock()
+    rutas = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    with (patch('soyyo.auxiliares.detectar_usb', return_value=rutas),
+          patch('soyyo.auxiliares.muestra_tabla', side_effect=funcion_mockeada),
+          patch('soyyo.auxiliares.captura_teclado', side_effect=[b'S', b's', b's', b'a', b'A', b'c']),
+          pytest.raises(KeyboardInterrupt)):
+        selecciona_ruta()
+    calls = [call(rutas, 0, 5), call(rutas, 5, 10), call(rutas, 10, 15), call(rutas, 10, 15),
+             call(rutas, 5, 10), call(rutas, 0, 5)]
+    funcion_mockeada.assert_has_calls(calls, any_order=True)
+
+
+def test_selecciona_ruta_caracter_que_no_debe():
+    funcion_mockeada = MagicMock()
+    rutas = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    with (patch('soyyo.auxiliares.detectar_usb', return_value=rutas),
+          patch('soyyo.auxiliares.muestra_tabla', side_effect=funcion_mockeada),
+          patch('soyyo.auxiliares.captura_teclado', side_effect=[b'z', b'c']),
+          pytest.raises(KeyboardInterrupt)):
+        selecciona_ruta()
+    calls = [call(rutas, 0, 5), call(rutas, 0, 5)]
+    funcion_mockeada.assert_has_calls(calls, any_order=True)
+
+
+@pytest.mark.parametrize('caracter', [b'c', b'C'])
+def test_selecciona_ruta_KeyboardInterrupt(caracter):
+    with (patch('soyyo.auxiliares.detectar_usb', return_value=[1]),
+          patch('soyyo.auxiliares.muestra_tabla'),
+          patch('soyyo.auxiliares.captura_teclado', return_value=caracter),
+          pytest.raises(KeyboardInterrupt)):
+        selecciona_ruta()

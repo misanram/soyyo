@@ -7,6 +7,9 @@ import hashlib
 import hmac
 import json
 import logging
+import os
+import readline  # noqa: F401
+import subprocess
 import sys
 import termios
 import time
@@ -21,9 +24,10 @@ import keyring
 import keyring.errors as keyring_errors
 
 from .constantes import BaseTabla, EstadoApp, TIEMPO_DE_BLOQUEO
-from .errores import ErrorApp, FirmaInvalidaError, PepperNotFoundError
-from .mensajes import (MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
-                       MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS, MSG_FIRMA_INVALIDA, MSG_SIN_PEPPER)
+from .errores import AppError, FirmaInvalidaError, PepperNotFoundError
+from .mensajes import (MSG_CABECERA, MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
+                       MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS, MSG_FIRMA_INVALIDA, MSG_SIN_DISPOSITIVO,
+                       MSG_SIN_PEPPER)
 
 log = logging.getLogger(__name__)
 
@@ -105,10 +109,19 @@ def check_almacen(data_path):
     return data_path.exists()
 
 
-def obtener_pin(prompt_head, setup=True):
+def captura_teclado(prompt='', una_tecla=False, setup=False, pin=False, dispara=''):
     """
-    Esta función está diseñada para capturar datos para la app
-    Captura una entrada y la valida.
+    Esta función está diseñada para capturar datos para la app es una sustitución vitaminada del input()
+    Puede recibir varios parámetros:
+        prompt: hace las veces del promp del input
+        una_tecla: Si True solo recoge una pulsación y return (en plan pulse una tecla para continuar...)
+        setup: Si True configura para la acción setup
+        pin: Si True configura para pedir un PIN
+        dispara: Hace que la función espere a que alguna de las teclas de string sea pulsada y la devuelve.
+
+        Salvo prompt, los demás paraámetros son incompatibles entre sí. Si se recibe más de un parámetro se
+        levanta una exception
+
     Pasos:
         Crea una cadena de texto que usa como prompt
         Pide los datos (byte a byte)
@@ -116,15 +129,20 @@ def obtener_pin(prompt_head, setup=True):
         Devuelve el dato validado
     La captura puede detenerse con Ctrl+C
 
-    Argumentos
-        prompt_head (str): El inicio del mensaje que verá el usuario.
-        setup (bool): True si es setup.
-
     Return
         La entrada validada o KeyboardInterrupt
     """
 
-    prompt = f'\n\r{prompt_head}: '
+    if sum(bool(_) for _ in [una_tecla, setup, pin, dispara]) > 1:
+        raise TypeError('Parámetros incompatibles en la llamada a la función')
+
+    if setup or pin or una_tecla:
+        oculto = True
+        dispara = ''
+    else:
+        oculto = False
+
+    aceptables = digits + dispara
 
     while True:
         try:
@@ -137,16 +155,21 @@ def obtener_pin(prompt_head, setup=True):
                 sys.stdout.flush()
                 while True:
                     ch = sys.stdin.buffer.read(1)
-                    if ch[0] not in (3, 10, 13, 127) and chr(ch[0]) not in digits:
+                    if una_tecla:  # Una unica pulsación termina el bucle
+                        break
+                    if ch[0] not in (3, 10, 13, 127) and chr(ch[0]) not in aceptables:
                         sys.stdout.write('✗')
                         sys.stdout.flush()
                         time.sleep(0.1)
-                        sys.stdout.write('\b \b')
+                        sys.stdout.write('\b \b')  # retrocede, sobreescribe con espacio, retrocede
                         sys.stdout.flush()
-                        sys.stdout.write('\x07')
+                        sys.stdout.write('\x07')  # campana
                         sys.stdout.flush()
                         continue
                     if ch in (b'\n', b'\r'):
+                        break
+                    elif chr(ch[0]) in dispara:  # Un único carácter (en dispara) termina el bucle
+                        data = ch
                         break
                     elif ch == b'\x7f':  # backspace
                         if data:
@@ -157,7 +180,10 @@ def obtener_pin(prompt_head, setup=True):
                         raise KeyboardInterrupt
                     else:
                         data += ch
-                        sys.stdout.write('*')
+                        if oculto:
+                            sys.stdout.write('*')
+                        else:
+                            sys.stdout.write(ch.decode())
                         sys.stdout.flush()
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old)
@@ -298,7 +324,7 @@ def autorizame(data_path):
 
         while intento < 3:
             try:
-                pin = obtener_pin('Introduzca el PIN', setup=False)
+                pin = captura_teclado(prompt='\n\rIntroduzca el PIN: ', pin=True)
                 print('\r')
             except KeyboardInterrupt:
                 log.info('Cancelado por el usuario.')
@@ -341,6 +367,26 @@ def autorizame(data_path):
         return False, None, EstadoApp.FICHERO_CORRUPTO
 
 
+def detectar_usb():
+    """
+    Crea una lista con los puntos de montaje disponibles para usar.
+    """
+
+    result = subprocess.run(['/usr/bin/lsblk', '-J', '-o', 'NAME,TRAN,MOUNTPOINT,LABEL,SIZE,RM'],
+                            capture_output=True, text=True)
+    if result.returncode != 0:
+        raise Exception(result.stderr)
+
+    usables = []
+    for _ in json.loads(result.stdout)["blockdevices"]:
+        particiones = _.get('children', [{}])
+        for particion in particiones:
+            punto_montaje = particion.get('mountpoint')
+            if punto_montaje and os.access(punto_montaje, os.W_OK):
+                usables.append(Usable(ruta=punto_montaje, capacidad=particion.get('size')))  # type: ignore
+    return usables
+
+
 def muestra_tabla(lista_datos, inicio=0, fin=5):
     """
     Muestra una bonita tabla con los campos del dataclass que se le pasa.
@@ -348,13 +394,13 @@ def muestra_tabla(lista_datos, inicio=0, fin=5):
 
     if not lista_datos:
         log.warning('Lista vacia')
-        raise ErrorApp
+        raise AppError
 
     try:
         clase = lista_datos[0].__class__
         if not is_dataclass(clase):
             log.warning('Lista sin dataclass')
-            raise ErrorApp
+            raise AppError
 
         tmp = {'id': max(len(str(clase.instancias)), 2)}
         tmp.update(clase.max_len)
@@ -377,3 +423,37 @@ def muestra_tabla(lista_datos, inicio=0, fin=5):
 
     except Exception:
         raise
+
+
+def selecciona_ruta():
+    """
+    Muestra una pantalla para seleccionar una ruta.
+    """
+
+    inicio = 0
+    rutas = detectar_usb()
+    while True:
+        if sys.stdout.isatty():
+            print('\033c', end='')  # pragma: no cover
+        print(MSG_CABECERA)
+        if not rutas:
+            print(MSG_SIN_DISPOSITIVO)
+            return ''
+        fin = min(inicio + 5, len(rutas))
+        print(f'\nMostrando {inicio + 1}-{fin} de {len(rutas)} dispositivos')
+        muestra_tabla(rutas, inicio, inicio + 5)
+        print(
+                f'[S] Página Siguiente [A] Página Anterior\n[C] Cancelar\n[{inicio + 1}-{fin}] Elegir '
+                f'dispositivo ', end='')
+        entrada = captura_teclado(dispara='acsACS').decode()
+        if entrada in 'aA':
+            inicio -= 5
+            inicio = max(inicio, 0)
+        elif entrada in 'sS':
+            if inicio + 5 < len(rutas):
+                inicio += 5
+        elif entrada in 'cC':
+            raise KeyboardInterrupt
+        elif entrada.isdigit():
+            if inicio + 1 <= int(entrada) <= fin:
+                return rutas[int(entrada) - 1]

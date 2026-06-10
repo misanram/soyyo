@@ -140,7 +140,7 @@ def test_comprobar_estado_error_JSON(almacen_valido, caplog):
           patch('soyyo.acciones.check_almacen', return_value=True),
           patch('soyyo.acciones.keyring.get_password', return_value=pepper),
           patch('soyyo.auxiliares.json.load', side_effect=json.JSONDecodeError('msg', 'doc', 0)),
-          caplog.at_level(logging.ERROR),):
+          caplog.at_level(logging.ERROR)):
         # @formatter:on
         resultado = comprobar_estado(fichero)
         mensajes = [r.message for r in caplog.records]
@@ -230,13 +230,39 @@ def test_setup_sin_error(tmp_path):
 
     with (patch('soyyo.acciones.keyring.set_password', side_effect=_fake_set_password),
           patch('soyyo.auxiliares.keyring.get_password', side_effect=_fake_get_password),
-          patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678'))):
+          patch('soyyo.acciones.selecciona_ruta', return_value='/unaruta/valida'),
+          patch('soyyo.acciones.captura_teclado', return_value=bytearray(b'12345678'))):
         assert setup(fichero) == EstadoApp.SALIENDO_OK
 
 
-def test_setup_keyboard_interrupt(tmp_path):
+def test_setup_sin_ruta(tmp_path):
     fichero = tmp_path / 'datos.json'
-    with patch('soyyo.acciones.obtener_pin', side_effect=KeyboardInterrupt):
+    with (patch('soyyo.acciones.captura_teclado', return_value=' '),
+          patch('soyyo.acciones.selecciona_ruta', return_value=''), ):
+        assert setup(fichero) == EstadoApp.SALIENDO_ERROR
+
+
+def test_setup_ruta_KeyboardInterrupt(tmp_path):
+    fichero = tmp_path / 'datos.json'
+    with (patch('soyyo.acciones.captura_teclado', return_value=' '),
+          patch('soyyo.acciones.selecciona_ruta', side_effect=KeyboardInterrupt), ):
+        assert setup(fichero) == EstadoApp.SALIENDO_OK
+
+
+def test_setup_kKeyboardInterrupt_pines_llave(tmp_path):
+    fichero = tmp_path / 'datos.json'
+    with (patch('soyyo.acciones.selecciona_ruta', return_value='/unaruta/valida'),
+          patch('soyyo.acciones.captura_teclado',
+                side_effect=[' ', KeyboardInterrupt, KeyboardInterrupt])):
+        assert setup(fichero) == EstadoApp.SALIENDO_OK
+
+
+def test_setup_kKeyboardInterrupt_pines(tmp_path):
+    fichero = tmp_path / 'datos.json'
+    with (patch('soyyo.acciones.selecciona_ruta', return_value='/unaruta/valida'),
+          patch('soyyo.acciones.captura_teclado',
+                side_effect=[' ', bytearray(b'12345678'), bytearray(b'12345678'), KeyboardInterrupt,
+                             KeyboardInterrupt])):
         assert setup(fichero) == EstadoApp.SALIENDO_OK
 
 
@@ -253,19 +279,24 @@ def test_setup_pines_distintos(tmp_path, capsys):
     # @formatter:off
     with (patch('soyyo.acciones.keyring.set_password', side_effect=_fake_set_password),
           patch('soyyo.auxiliares.keyring.get_password', side_effect=_fake_get_password),
-          patch('soyyo.acciones.obtener_pin', side_effect=[bytearray(b'0'), bytearray(b'1'),
-                                                           bytearray(b'12345678'),bytearray(b'12345678')])):
+          patch('soyyo.acciones.selecciona_ruta', return_value='/unaruta/valida'),
+          patch('soyyo.acciones.captura_teclado', side_effect=[bytearray(b'0'),
+                                                               bytearray(b'12345678'), bytearray(b'12345679'),
+                                                               bytearray(b'12345678'), bytearray(b'12345678'),
+                                                               bytearray(b'12345678'), bytearray(b'12345679'),
+                                                               bytearray(b'12345678'), bytearray(b'12345678'),
+                                                               ])):
         # @formatter:on
         setup(fichero)
         captured = capsys.readouterr()
-    assert '\nAmbos valores deben ser iguales.\n\n' in captured.out
+    assert 'Ambos valores deben ser iguales' in captured.out
 
 
 def test_setup_set_keyring_error(tmp_path):
     fichero = tmp_path / 'datos.json'
-    fichero.touch()
     # @formatter:off
-    with (patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678')),
+    with (patch('soyyo.acciones.selecciona_ruta', return_value='/unaruta/valida'),
+          patch('soyyo.acciones.captura_teclado', return_value=bytearray(b'12345678')),
           patch('soyyo.acciones.keyring.set_password', side_effect=keyring_errors.PasswordSetError)):
         # @formatter:on
         assert setup(fichero) == EstadoApp.SALIENDO_ERROR
@@ -275,7 +306,7 @@ def test_setup_file_write_error(tmp_path):
     fichero = tmp_path / 'datos.json'
     # @formatter:off
     with (patch('soyyo.acciones.guardar_json', side_effect=OSError),
-          patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678'))):
+          patch('soyyo.acciones.captura_teclado', return_value=bytearray(b'12345678'))):
         # @formatter:on
         assert setup(fichero) == EstadoApp.SALIENDO_ERROR
 
@@ -294,7 +325,7 @@ def test_setup_delete_password_keyring_error(tmp_path):
     with (patch('soyyo.acciones.guardar_json', side_effect=OSError),
           patch('soyyo.acciones.keyring.set_password', side_effect=_fake_set_password),
           patch('soyyo.auxiliares.keyring.get_password', side_effect=_fake_get_password),
-          patch('soyyo.acciones.obtener_pin', return_value=bytearray(b'12345678')),
+          patch('soyyo.acciones.captura_teclado', return_value=bytearray(b'12345678')),
           patch('soyyo.acciones.keyring.delete_password', side_effect=keyring_errors.PasswordDeleteError)):
         # @formatter:on
         assert setup(fichero) == EstadoApp.SALIENDO_ERROR
@@ -303,7 +334,7 @@ def test_setup_delete_password_keyring_error(tmp_path):
 def test_setup_error_inesperado(almacen_valido, caplog):
     fichero, pepper = almacen_valido()
     # @formatter:off
-    with (patch('soyyo.acciones.obtener_pin', side_effect=Exception),
+    with (patch('soyyo.acciones.captura_teclado', side_effect=Exception),
           caplog.at_level(logging.ERROR)):
         # @formatter:on
         with pytest.raises(Exception):
@@ -596,10 +627,10 @@ def test_captura_funciona_bien(almacen_valido):
         mock_decoded = MagicMock()
         mock_decoded.data = b'otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP'
         with (patch('soyyo.acciones.QApplication'),
-              patch('soyyo.auxiliares.obtener_pin', return_value=bytearray(b'12345678')),
+              patch('soyyo.auxiliares.captura_teclado', return_value=bytearray(b'12345678')),
               patch('soyyo.auxiliares.keyring.get_password', return_value=pepper),
               patch('soyyo.acciones.keyring.get_password', return_value=pepper),
-              patch('soyyo.acciones.decode', return_value=[mock_decoded]),):
+              patch('soyyo.acciones.decode', return_value=[mock_decoded])):
             # @formatter:on
             resultado = captura(fichero)
     assert resultado == EstadoApp.SALIENDO_OK
@@ -609,7 +640,7 @@ def test_captura_no_autoriza(tmp_path):
     # @formatter:off
     with (patch('soyyo.acciones.QApplication'),
           patch('soyyo.acciones.VentanaCaptura') as mock_ventana,
-          patch('soyyo.acciones.autorizame', return_value=(False, (None, bytearray(b'')), EstadoApp.SIN_PEPPER)),):
+          patch('soyyo.acciones.autorizame', return_value=(False, (None, bytearray(b'')), EstadoApp.SIN_PEPPER))):
         # @formatter:on
         mock_ventana.return_value.imagen = None
         mock_ventana.return_value.error = False
@@ -623,7 +654,7 @@ def test_captura_sin_imagen(tmp_path):
     with (patch('soyyo.acciones.QApplication'),
           patch('soyyo.acciones.VentanaCaptura') as mock_ventana,
           patch('soyyo.acciones.decode', return_value=[]),
-          patch('soyyo.acciones.autorizame', return_value=(True, (None, bytearray(b'')), None)),):
+          patch('soyyo.acciones.autorizame', return_value=(True, (None, bytearray(b'')), None))):
         # @formatter:on
         mock_ventana.return_value.imagen = None
         mock_ventana.return_value.error = False
@@ -637,8 +668,7 @@ def test_captura_imagen_error(tmp_path, caplog):
     with (patch('soyyo.acciones.QApplication'),
           patch('soyyo.acciones.VentanaCaptura') as mock_ventana,
           patch('soyyo.acciones.decode', return_value=[]),
-          # patch('soyyo.acciones.autorizame', return_value=(True, (None, bytearray(b'')), None)),
-          caplog.at_level(logging.ERROR),):
+          caplog.at_level(logging.ERROR)):
         # @formatter:on
         mock_ventana.return_value.imagen = None
         mock_ventana.return_value.error = CapturaError('Error misterioso durante la captura.', (), OSError())
@@ -653,7 +683,7 @@ def test_captura_imagen_sin_qr(tmp_path):
     with (patch('soyyo.acciones.QApplication'),
           patch('soyyo.acciones.VentanaCaptura') as mock_ventana,
           patch('soyyo.acciones.decode', return_value=[]),
-          patch('soyyo.acciones.autorizame', return_value=(True, (None, bytearray(b'')), None)),):
+          patch('soyyo.acciones.autorizame', return_value=(True, (None, bytearray(b'')), None))):
         # @formatter:on
         mock_ventana.return_value.imagen = 'imagen_falsa'
         mock_ventana.return_value.error = False
@@ -673,7 +703,7 @@ def test_captura_sin_pepper(almacen_valido):
         with (patch('soyyo.acciones.QApplication'),
               patch('soyyo.acciones.autorizame', return_value=(True, (None, bytearray(b'')), None)),
               patch('soyyo.acciones.decode', return_value=[mock_decoded]),
-              patch('soyyo.acciones.keyring.get_password', return_value=None),):
+              patch('soyyo.acciones.keyring.get_password', return_value=None)):
             # @formatter:on
             resultado = captura(fichero)
     assert resultado == EstadoApp.SALIENDO_ERROR
@@ -688,7 +718,7 @@ def test_captura_error_escritura_fichero(almacen_valido, caplog):
         mock_decoded = MagicMock()
         mock_decoded.data = b'otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP'
         with (patch('soyyo.acciones.QApplication'),
-              patch('soyyo.auxiliares.obtener_pin', return_value=bytearray(b'12345678')),
+              patch('soyyo.auxiliares.captura_teclado', return_value=bytearray(b'12345678')),
               patch('soyyo.auxiliares.keyring.get_password', return_value=pepper),
               patch('soyyo.acciones.keyring.get_password', return_value=pepper),
               patch('soyyo.acciones.decode', return_value=[mock_decoded]),
@@ -718,9 +748,9 @@ def test_captura_error_inesperado(almacen_valido, caplog):
 def test_lista_funciona_bien_sin_totps(almacen_valido):
     fichero, pepper = almacen_valido()
     # @formatter:off
-    with (patch('soyyo.auxiliares.obtener_pin', return_value=bytearray(b'12345678')),
+    with (patch('soyyo.auxiliares.captura_teclado', return_value=bytearray(b'12345678')),
           patch('soyyo.auxiliares.keyring.get_password', return_value=pepper),
-          patch('soyyo.acciones.keyring.get_password', return_value=pepper),):
+          patch('soyyo.acciones.keyring.get_password', return_value=pepper)):
         # @formatter:on
         resultado = lista(fichero)
     assert resultado == EstadoApp.SALIENDO_OK
@@ -729,7 +759,7 @@ def test_lista_funciona_bien_sin_totps(almacen_valido):
 def test_lista_funciona_bien_con_totps(almacen_valido):
     fichero, pepper = almacen_valido(totps=True)
     # @formatter:off
-    with (patch('soyyo.auxiliares.obtener_pin', return_value=bytearray(b'12345678')),
+    with (patch('soyyo.auxiliares.captura_teclado', return_value=bytearray(b'12345678')),
           patch('soyyo.auxiliares.keyring.get_password', return_value=pepper),
           patch('soyyo.acciones.keyring.get_password', return_value=pepper),
           patch('soyyo.acciones.Fernet.decrypt', return_value=b'{"nombre": "Nombre"}'), ):
@@ -751,7 +781,7 @@ def test_lista_sin_pepper(almacen_valido):
     fichero, pepper = almacen_valido()
     # @formatter:off
     with (patch('soyyo.acciones.autorizame', return_value=(True, (None, bytearray(b'')), None)),
-          patch('soyyo.acciones.keyring.get_password', return_value=None),):
+          patch('soyyo.acciones.keyring.get_password', return_value=None)):
         # @formatter:on
         resultado = lista(fichero)
     assert resultado == EstadoApp.SALIENDO_ERROR

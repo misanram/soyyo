@@ -25,13 +25,16 @@ from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 from pyzbar.pyzbar import decode
 
-from .auxiliares import (autorizame, check_almacen, check_keyring, guardar_json, obtener_pin,
-                         reintentar_keyring, )
+from .auxiliares import (autorizame, captura_teclado, check_almacen, check_keyring, guardar_json,
+                         reintentar_keyring, selecciona_ruta)
 from .constantes import CURSORES, EstadoApp, Zona
-from .errores import CapturaError, FirmaInvalidaError, PepperNotFoundError
+from .errores import CapturaError, FirmaInvalidaError, PepperNotFoundError, SinRutaLlaveError
 from .mensajes import (MSG_CABECERA, MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
-                       MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_FICHERO_CORRUPTO, MSG_PROMPT_RESET,
-                       MSG_RESET_REALIZADO, MSG_SETUP, MSG_SIN_PEPPER, MSG_TOTP_CAPTURADO, )
+                       MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_FICHERO_CORRUPTO,
+                       MSG_INSTRUCCIONES_SETUP, MSG_PIN_FICHERO_LLAVE, MSG_PIN_SETUP, MSG_PROMPT_RESET,
+                       MSG_RESET_REALIZADO,
+                       MSG_SIN_PEPPER,
+                       MSG_TOTP_CAPTURADO)
 
 BORDE = 8
 
@@ -349,16 +352,47 @@ def setup(data_path):
     """
 
     try:
+        if sys.stdout.isatty():
+            print('\033c', end='')  # pragma: no cover
+        print(MSG_CABECERA)
+        print(MSG_INSTRUCCIONES_SETUP, end='')
+        captura_teclado(una_tecla=True)
+        while True:
+            try:
+                ruta = selecciona_ruta()
+            except KeyboardInterrupt:
+                return EstadoApp.SALIENDO_OK
+            if not ruta:
+                log.warning('No hay ruta para guardar el fichero llave.')
+                raise SinRutaLlaveError
+            if sys.stdout.isatty():
+                print('\033c', end='')  # pragma: no cover
+            print(MSG_CABECERA)
+            print(MSG_PIN_FICHERO_LLAVE)
+            preguntas = ['\n\rPIN: ', '\n\rRepita el PIN: ']
+            try:
+                pines_llave = [captura_teclado(prompt=arg, setup=True) for arg in preguntas]
+                print('\r')
+            except KeyboardInterrupt:
+                return EstadoApp.SALIENDO_OK
+
+            if pines_llave[0] != pines_llave[1]:
+                print('\nAmbos valores deben ser iguales.\n\n')
+                time.sleep(1)
+                continue
+            break
+        time.sleep(2)
+
         while True:
             if sys.stdout.isatty():
                 print('\033c', end='')  # pragma: no cover
 
             print(MSG_CABECERA)
-            print(MSG_SETUP)
-            preguntas = ['PIN', 'Repita el PIN']
+            print(MSG_PIN_SETUP)
+            preguntas = ['\n\rPIN: ', '\n\rRepita el PIN: ']
 
             try:
-                pines = [obtener_pin(arg, True) for arg in preguntas]
+                pines = [captura_teclado(prompt=arg, setup=True) for arg in preguntas]
                 print('\r')
             except KeyboardInterrupt:
                 return EstadoApp.SALIENDO_OK
@@ -393,7 +427,11 @@ def setup(data_path):
         return EstadoApp.SALIENDO_OK
 
     except keyring_errors.PasswordSetError as error:
-        log.exception('Error al guardar el pepper en el keyring,')
+        log.exception('Error al guardar el pepper en el keyring.')
+        print(error)
+        return EstadoApp.SALIENDO_ERROR
+    except SinRutaLlaveError as error:
+        log.exception('No hay ruta para guardar el fichero llave.')
         print(error)
         return EstadoApp.SALIENDO_ERROR
     except OSError as error:

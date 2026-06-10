@@ -3,7 +3,7 @@ Definición de errores
 """
 
 
-class ErrorApp(Exception):
+class AppError(Exception):
     """
     Error de la aplicación
     """
@@ -11,7 +11,7 @@ class ErrorApp(Exception):
     pass
 
 
-class PepperNotFoundError(ErrorApp):
+class PepperNotFoundError(AppError):
     """
     get_password no devuelve el pepper
     """
@@ -19,13 +19,13 @@ class PepperNotFoundError(ErrorApp):
     pass
 
 
-class FirmaInvalidaError(ErrorApp):
+class FirmaInvalidaError(AppError):
     """
     La firma del fichero no es válida. El fichero ha sido manipulado.
     """
 
 
-class CapturaError(ErrorApp):
+class CapturaError(AppError):
     """
     Error durante la captura de imagen
     """
@@ -34,3 +34,11 @@ class CapturaError(ErrorApp):
         super().__init__(mensaje)
         self.area = area
         self.causa = causa  # excepción original
+
+
+class SinRutaLlaveError(AppError):
+    """
+    No hay ruta para guardar el fichero llave
+    """
+
+    pass

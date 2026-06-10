@@ -6,8 +6,9 @@ Mensajes que muestra el programa (esto puede que desaparezca o no...)
 
 MSG_CABECERA = """
 
-soyyo un programa para manejar tus TOTP.
-            """
+soyyo un programa para manejar tus TOTP
+=======================================
+"""
 
 MSG_SIN_KEYRING = """
     No hay un sistema de almacenamiento seguro disponible en este sistema.
@@ -61,8 +62,8 @@ MSG_RESET_REALIZADO = """
 
 ###### Mensajes del setup
 
-MSG_SETUP = """
-    Debe crear un PIN para usar la aplicación.
+MSG_PIN_SETUP = """
+    Debe crear un PIN de acceso para usar la aplicación.
     Manténgalo en secreto y no lo comparta.
 
     MUY IMPORTANTE: El PIN no puede recuperarse. Si lo olvida,
@@ -70,6 +71,29 @@ MSG_SETUP = """
 
     - Use solamente caracteres numéricos.
     - Longitud: 8-20 caracteres."""
+
+MSG_INSTRUCCIONES_SETUP = """
+    Para configurar la aplicación debe crear dos secretos:
+         * Un PIN de recuperación que se guardará en la unidad de respaldo que usted elija
+         * Un PIN de acceso para el uso de la aplicación
+
+    Primero debe elegir la unidad de reslpaldo.
+    
+    Pulse una tecla para continuar."""
+
+MSG_PIN_FICHERO_LLAVE = """
+    Debe crear un PIN de recuperación para generar un FICHERO LLAVE.
+    Manténgalo en secreto y no lo comparta.
+    
+    Necesitará este PIN para reiniciar el programa si olvida el PIN de acceso.
+
+    MUY IMPORTANTE: Este PIN no puede recuperarse. 
+
+    - Use solamente caracteres numéricos.
+    - Longitud: 8-20 caracteres."""
+
+MSG_SIN_DISPOSITIVO = """
+    No hay dispositivos disponibles."""
 
 ###### Mensajes de autorizar
 
