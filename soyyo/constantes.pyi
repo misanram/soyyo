@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 
@@ -21,13 +20,11 @@ class EstadoApp(Enum):
 
 @dataclass
 class BaseTabla:
-
     codigo: str
 
     def __post_init__(self) -> None: ...
 
-
-    def _campos_especificios(self) -> list:
+    def _campos_especificios(self) -> list: ...
 
     @classmethod
     def reset(cls) -> None: ...

@@ -391,39 +391,47 @@ def detectar_usb():
     return usables
 
 
-def muestra_tabla(lista_datos, inicio=0, fin=5):
+def muestra_tabla(lista_datos, primer_elemento=0, ultimo_elemento=5):
     """
-    Muestra una bonita tabla con los campos del dataclass que se le pasa.
+    Muestra una bonita tabla con los campos del dataclass (derivado de BaseTabla) que se le pasa.
     """
-
-    if not lista_datos:
-        log.warning('Lista vacia')
-        raise AppError
 
     try:
+        if not lista_datos:
+            log.warning('Lista vacia')
+            raise AppError
+
         clase = lista_datos[0].__class__
         if not is_dataclass(clase):
             log.warning('Lista sin dataclass')
             raise AppError
 
-        tmp = {'id': max(len(str(clase.instancias)), 2)}
-        tmp.update(clase.max_len)
+        def _linea_tabla(columnas: int, inicio: str, medio: str, fin: str, max_len: dict) -> str:
+            return inicio + ''.join(f'{"═" * (ancho + 2)}{medio if orden < columnas else fin}'
+                                    for orden, ancho in enumerate(max_len.values()))
 
-        sep = '+'
-        sep += ''.join([f'{"-" * (_ + 2)}+' for _ in clase.max_len.values()])
-        tit = '|'
-        tit += ''.join(
-                [f' {campo.name.capitalize():^{clase.max_len[campo.name]}} |' for campo in fields(clase)])
+        def _linea_texto(columnas: int, inicio: str, medio: str, fin: str, datos: dict, formatear) -> str:
+            return inicio + ''.join(f'{formatear(clave, valor)}{medio if valor[0] < columnas else fin}'
+                                    for clave, valor in datos.items())
 
-        print(sep)
+        tb0 = _linea_tabla(len(fields(clase)), '╔', '╤', '╗', clase.max_len)
+        tb1 = _linea_tabla(len(fields(clase)), '╠', '╪', '╢', clase.max_len)
+        tb2 = _linea_tabla(len(fields(clase)), '╚', '╧', '╝', clase.max_len)
+        tmp = dict(zip((campo.name for campo in fields(clase)),
+                       enumerate(clase.max_len.values())))
+        formato = lambda clave, valor: f'{clave.capitalize():^{valor[1] + 2}}'
+        tit = _linea_texto(len(fields(clase)), '║', '|', '║', tmp, formato)
+
+        print(tb0)
         print(tit)
-        print(sep)
-        for instancia in lista_datos[inicio:fin]:
-            linea = f'|'
-            linea += ''.join([f' {getattr(instancia, campo.name):<{clase.max_len[campo.name]}} |'
-                              for campo in fields(clase)])
-            print(linea)
-        print(sep)
+        print(tb1)
+        formato = lambda clave, valor: f' {clave:<{valor[1]}} '
+        for instancia in lista_datos[primer_elemento:ultimo_elemento]:
+            tmp = dict(zip((getattr(instancia, campo.name) for campo in fields(clase)),
+                           enumerate(clase.max_len.values())))
+            txt = _linea_texto(len(fields(clase)), '║', '|', '║', tmp, formato)
+            print(txt)
+        print(tb2)
 
     except Exception:
         raise
