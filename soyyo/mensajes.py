@@ -4,11 +4,15 @@ Mensajes que muestra el programa (esto puede que desaparezca o no...)
 
 ###### Mensajes genéricos y de arranque de la App
 
-MSG_CABECERA = """
+MSG_CABECERA = """'\033c'
 
-soyyo un programa para manejar tus TOTP
+\033[1;97msoyyo\033[m un programa para manejar tus TOTP\033[m
 =======================================
 """
+
+MSG_SISTEMA_INCOMPATIBLE = """
+    Este programa no puede ejecutarse en este ordenador.
+        Consulte con el administrador de su sistema."""
 
 MSG_SIN_KEYRING = """
     No hay un sistema de almacenamiento seguro disponible en este sistema.
@@ -46,13 +50,14 @@ MSG_ERROR_NO_CONTROLADO = """
 ###### Mensajes de la opción reset
 
 MSG_PROMPT_RESET = """
-        ¡¡¡ATENCIÓN!!!
+        \033[32;91m¡¡¡ATENCIÓN!!!\033[m
 
         Ha solicitado eliminar por completo toda la configuración.
 
-        Ello eliminará todas sus secretos TOTP almacenados.
+        Ello eliminará todos sus secretos TOTP almacenados.
 
         Este paso es irreversible.
+        
         Si/No/Cancelar: """
 
 MSG_RESET_REALIZADO = """

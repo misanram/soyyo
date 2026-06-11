@@ -87,6 +87,22 @@ def reintentar_keyring(intentos=3, espera=0.2):
 keyring.get_password = reintentar_keyring()(keyring.get_password)
 
 
+def check_sistema():
+    """
+    Comprueba si la aplicación puede correr en el sistema.
+    """
+
+    if sys.platform != 'linux':
+        print('Este programa requiere Linux.')
+        return False
+
+    if not sys.stdout.isatty() and not os.environ.get('CI'):
+        print('Este programa requiere una terminal.')
+        return False
+
+    return True
+
+
 def check_keyring():
     """
     Comprueba si keyring es usable en este sistema

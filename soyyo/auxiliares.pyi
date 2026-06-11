@@ -18,6 +18,9 @@ class Usable(BaseTabla):
 def reintentar_keyring(intentos: int, espera: float) -> Callable: ...
 
 
+def check_sistema() -> bool: ...
+
+
 def check_keyring() -> bool: ...
 
 

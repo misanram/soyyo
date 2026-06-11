@@ -25,8 +25,8 @@ from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 from pyzbar.pyzbar import decode
 
-from .auxiliares import (autorizame, captura_teclado, check_almacen, check_keyring, guardar_json,
-                         reintentar_keyring, selecciona_ruta)
+from .auxiliares import (autorizame, captura_teclado, check_almacen, check_keyring, check_sistema,
+                         guardar_json, reintentar_keyring, selecciona_ruta)
 from .constantes import CURSORES, EstadoApp, Zona
 from .errores import CapturaError, FirmaInvalidaError, PepperNotFoundError, SinRutaLlaveError
 from .mensajes import (MSG_CABECERA, MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
@@ -241,9 +241,10 @@ def comprobar_estado(data_path):
        El orden es estricto: cada comprobación asume que las anteriores han pasado.
 
        Secuencia:
-           1. Keyring del sistema operativo (requisito de plataforma)
-           2. Existencia del almacén (distingue primer arranque de ejecución normal)
-           3. Luego hace una comprobación de seguridad, comprobando atómicamente almacén, pepper y firma:
+           1. Comprueba el SO y que haya una terminal operativa
+           2. Keyring del sistema operativo (requisito de plataforma)
+           3. Existencia del almacén (distingue primer arranque de ejecución normal)
+           4. Luego hace una comprobación de seguridad, comprobando atómicamente almacén, pepper y firma:
                 Comprueba que exista almacen, pepper y firma.
                 Que todo sea legible y correcto.
                 Que la firma abra el almacén.
@@ -251,6 +252,7 @@ def comprobar_estado(data_path):
                 Que la aplicación no esté bloqueada permanentemente
 
        Devuelve un estado, uno de los siguientes valores:
+           - SISTEMA_INCOMPATIBLE → el sistema no está soportado (no es linux o no hay terminal)
            - INICIALIZACION_CORRECTA → todo en orden
            - PRIMER_ARRANQUE → no hay almacén (primera ejecución o datos perdidos)
            - SIN_KEYRING → el SO no tiene keyring; el programa no puede funcionar
@@ -269,6 +271,8 @@ def comprobar_estado(data_path):
            usuario de la situación y sale sin generar errores.
        """
     try:
+        if not check_sistema():
+            return EstadoApp.SISTEMA_INCOMPATIBLE
         if not check_keyring():
             return EstadoApp.SIN_KEYRING
         elif not check_almacen(data_path):
@@ -324,9 +328,6 @@ def reset(data_path):
     """
 
     while True:
-        if sys.stdout.isatty():
-            print('\033c', end='')  # pragma: no cover
-
         try:
             print(MSG_CABECERA)
             data = input(MSG_PROMPT_RESET).upper().strip()
@@ -352,8 +353,6 @@ def setup(data_path):
     """
 
     try:
-        if sys.stdout.isatty():
-            print('\033c', end='')  # pragma: no cover
         print(MSG_CABECERA)
         print(MSG_INSTRUCCIONES_SETUP, end='')
         captura_teclado(una_tecla=True)
@@ -365,8 +364,6 @@ def setup(data_path):
             if not ruta:
                 log.warning('No hay ruta para guardar el fichero llave.')
                 raise SinRutaLlaveError
-            if sys.stdout.isatty():
-                print('\033c', end='')  # pragma: no cover
             print(MSG_CABECERA)
             print(MSG_PIN_FICHERO_LLAVE)
             preguntas = ['\n\rPIN: ', '\n\rRepita el PIN: ']
@@ -384,9 +381,6 @@ def setup(data_path):
         time.sleep(2)
 
         while True:
-            if sys.stdout.isatty():
-                print('\033c', end='')  # pragma: no cover
-
             print(MSG_CABECERA)
             print(MSG_PIN_SETUP)
             preguntas = ['\n\rPIN: ', '\n\rRepita el PIN: ']
@@ -559,8 +553,6 @@ def lista(data_path):
     pepper: Any = None
     datos: Any = None
     try:
-        if sys.stdout.isatty():
-            print('\033c', end='')  # pragma: no cover
         print(MSG_CABECERA)
         # datos[0] es el almacen JSON transformado en diccionario (dict[str, str])
         # datos[1] es el PIN (bytes)

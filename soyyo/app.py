@@ -13,8 +13,8 @@ from pathlib import Path
 
 from .acciones import captura, comprobar_estado, lista, reset, setup
 from .constantes import EstadoApp
-from .mensajes import (MSG_ERROR_NO_CONTROLADO, MSG_FICHERO_CORRUPTO, MSG_FIRMA_INVALIDA,
-                       MSG_SALIENDO_ERROR, MSG_SALIENDO_OK, MSG_SIN_KEYRING, MSG_SIN_PEPPER, )
+from .mensajes import (MSG_ERROR_NO_CONTROLADO, MSG_FICHERO_CORRUPTO, MSG_FIRMA_INVALIDA, MSG_SALIENDO_ERROR,
+                       MSG_SALIENDO_OK, MSG_SIN_KEYRING, MSG_SIN_PEPPER, MSG_SISTEMA_INCOMPATIBLE)
 
 locale.setlocale(locale.LC_ALL, '')
 
@@ -76,7 +76,10 @@ class Aplicacion:
                 log.debug('Estado postreset: %s', estado)
 
             while True:
-                if estado == EstadoApp.SIN_KEYRING:
+                if estado == EstadoApp.SISTEMA_INCOMPATIBLE:
+                    print(MSG_SISTEMA_INCOMPATIBLE)
+                    sys.exit(1)
+                elif estado == EstadoApp.SIN_KEYRING:
                     print(MSG_SIN_KEYRING)
                     sys.exit(1)
 

@@ -31,27 +31,40 @@ DERECHA = 'derecha'
 IZQUIERDA = 'izquierda'
 
 
+def test_comprobar_estado_llama_a_check_sistema(tmp_path):
+    fichero = tmp_path / 'datos.json'
+    with patch('soyyo.acciones.check_sistema', return_value=False) as mock_comprobar:
+        respuesta = comprobar_estado(fichero)
+        mock_comprobar.assert_called_with()
+        assert respuesta == EstadoApp.SISTEMA_INCOMPATIBLE
+
+
 def test_comprobar_estado_llama_a_check_keyring(tmp_path):
     fichero = tmp_path / 'datos.json'
-    with patch('soyyo.acciones.check_keyring', return_value=False) as mock_comprobar:
-        comprobar_estado(fichero)
+    with (patch('soyyo.acciones.check_sistema', return_value=True),
+          patch('soyyo.acciones.check_keyring', return_value=False) as mock_comprobar):
+        respuesta = comprobar_estado(fichero)
         mock_comprobar.assert_called_with()
+        assert respuesta == EstadoApp.SIN_KEYRING
 
 
 def test_comprobar_estado_llama_a_check_almacen(tmp_path):
     fichero = tmp_path / 'datos.json'
     # @formatter:off
-    with (patch('soyyo.acciones.check_keyring', return_value=True),
+    with (patch('soyyo.acciones.check_sistema', return_value=True),
+          patch('soyyo.acciones.check_keyring', return_value=True),
           patch('soyyo.acciones.check_almacen', return_value=False) as mock_comprobar):
         # @formatter:on
-        comprobar_estado(fichero)
+        respuesta = comprobar_estado(fichero)
         mock_comprobar.assert_called_with(fichero)
+        assert respuesta == EstadoApp.PRIMER_ARRANQUE
 
 
 def test_comprobar_estado_todo_ok(almacen_valido):
     fichero, pepper = almacen_valido()
     # @formatter:off
-    with (patch('soyyo.acciones.check_keyring', return_value=True),
+    with (patch('soyyo.acciones.check_sistema', return_value=True),
+          patch('soyyo.acciones.check_keyring', return_value=True),
           patch('soyyo.acciones.check_almacen', return_value=True),
           patch('soyyo.acciones.keyring.get_password', return_value=pepper)):
         # @formatter:on
@@ -62,7 +75,8 @@ def test_comprobar_estado_todo_ok(almacen_valido):
 def test_comprobar_estado_sin_firma(almacen_valido):
     fichero, pepper = almacen_valido(firmar='NO')
     # @formatter:off
-    with (patch('soyyo.acciones.check_keyring', return_value=True),
+    with (patch('soyyo.acciones.check_sistema', return_value=True),
+          patch('soyyo.acciones.check_keyring', return_value=True),
           patch('soyyo.acciones.check_almacen', return_value=True),
           patch('soyyo.acciones.keyring.get_password', return_value=pepper)):
         # @formatter:on
@@ -73,7 +87,8 @@ def test_comprobar_estado_sin_firma(almacen_valido):
 def test_comprobar_estado_firma_mala(almacen_valido):
     fichero, pepper = almacen_valido(firmar='fake')
     # @formatter:off
-    with (patch('soyyo.acciones.check_keyring', return_value=True),
+    with (patch('soyyo.acciones.check_sistema', return_value=True),
+          patch('soyyo.acciones.check_keyring', return_value=True),
           patch('soyyo.acciones.check_almacen', return_value=True),
           patch('soyyo.acciones.keyring.get_password', return_value=pepper)):
         # @formatter:on
@@ -84,7 +99,8 @@ def test_comprobar_estado_firma_mala(almacen_valido):
 def test_comprobar_estado_bloqueo_temporal(almacen_valido, caplog):
     fichero, pepper = almacen_valido(minutos_bloqueo=10000)
     # @formatter:off
-    with (patch('soyyo.acciones.check_keyring', return_value=True),
+    with (patch('soyyo.acciones.check_sistema', return_value=True),
+          patch('soyyo.acciones.check_keyring', return_value=True),
           patch('soyyo.acciones.check_almacen', return_value=True),
           patch('soyyo.acciones.keyring.get_password', return_value=pepper),
           caplog.at_level(logging.INFO)):
@@ -99,7 +115,8 @@ def test_comprobar_estado_bloqueo_temporal(almacen_valido, caplog):
 def test_comprobar_estado_bloqueo_temporal_solucionado(almacen_valido):
     fichero, pepper = almacen_valido(minutos_bloqueo=-10000)
     # @formatter:off
-    with (patch('soyyo.acciones.check_keyring', return_value=True),
+    with (patch('soyyo.acciones.check_sistema', return_value=True),
+          patch('soyyo.acciones.check_keyring', return_value=True),
           patch('soyyo.acciones.check_almacen', return_value=True),
           patch('soyyo.acciones.keyring.get_password', return_value=pepper)):
         # @formatter:on
@@ -110,7 +127,8 @@ def test_comprobar_estado_bloqueo_temporal_solucionado(almacen_valido):
 def test_comprobar_estado_bloqueo_permanente(almacen_valido, caplog):
     fichero, pepper = almacen_valido(num_bloqueos=10)
     # @formatter:off
-    with (patch('soyyo.acciones.check_keyring', return_value=True),
+    with (patch('soyyo.acciones.check_sistema', return_value=True),
+          patch('soyyo.acciones.check_keyring', return_value=True),
           patch('soyyo.acciones.check_almacen', return_value=True),
           patch('soyyo.acciones.keyring.get_password', return_value=pepper),
           caplog.at_level(logging.INFO)):
@@ -125,7 +143,8 @@ def test_comprobar_estado_bloqueo_permanente(almacen_valido, caplog):
 def test_comprobar_estado_sin_pepper(almacen_valido):
     fichero, pepper = almacen_valido()
     # @formatter:off
-    with (patch('soyyo.acciones.check_keyring', return_value=True),
+    with (patch('soyyo.acciones.check_sistema', return_value=True),
+          patch('soyyo.acciones.check_keyring', return_value=True),
           patch('soyyo.acciones.check_almacen', return_value=True),
           patch('soyyo.acciones.keyring.get_password', return_value=None)):
         # @formatter:on
@@ -136,7 +155,8 @@ def test_comprobar_estado_sin_pepper(almacen_valido):
 def test_comprobar_estado_error_JSON(almacen_valido, caplog):
     fichero, pepper = almacen_valido()
     # @formatter:off
-    with (patch('soyyo.acciones.check_keyring', return_value=True),
+    with (patch('soyyo.acciones.check_sistema', return_value=True),
+          patch('soyyo.acciones.check_keyring', return_value=True),
           patch('soyyo.acciones.check_almacen', return_value=True),
           patch('soyyo.acciones.keyring.get_password', return_value=pepper),
           patch('soyyo.auxiliares.json.load', side_effect=json.JSONDecodeError('msg', 'doc', 0)),
@@ -151,7 +171,8 @@ def test_comprobar_estado_error_JSON(almacen_valido, caplog):
 
 def test_comprobar_estado_error_lectura_fichero(caplog):
     # @formatter:off
-    with (patch('soyyo.acciones.check_keyring', return_value=True),
+    with (patch('soyyo.acciones.check_sistema', return_value=True),
+          patch('soyyo.acciones.check_keyring', return_value=True),
           patch('soyyo.acciones.check_almacen', return_value=True),
           patch('soyyo.acciones.check_almacen', return_value=True),
           caplog.at_level(logging.ERROR)):
@@ -166,7 +187,8 @@ def test_comprobar_estado_error_lectura_fichero(caplog):
 def test_comprobar_estado_error_inesperado(almacen_valido, caplog):
     fichero, pepper = almacen_valido()
     # @formatter:off
-    with (patch('soyyo.acciones.check_keyring', side_effect=Exception),
+    with (patch('soyyo.acciones.check_sistema', return_value=True),
+          patch('soyyo.acciones.check_keyring', side_effect=Exception),
           caplog.at_level(logging.ERROR)):
         # @formatter:on
         with pytest.raises(Exception):

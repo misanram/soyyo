@@ -12,6 +12,7 @@ class EstadoApp(Enum):
     Enumera los estados en los que puede encontrarse el sistema
     """
 
+    SISTEMA_INCOMPATIBLE = 'Sistema incompatible (no linux o no terminal)'
     SIN_KEYRING = 'Sin keyring'  # No hay keyring disponible
     PRIMER_ARRANQUE = 'Primer arranque'  # No hay fichero de datos
     SIN_PEPPER = 'Sin pepper'  # No hay pepper en el keyring

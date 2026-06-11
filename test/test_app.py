@@ -64,6 +64,20 @@ def test_run_estado_erroneo(caplog):
     assert 'La aplicación ha caido en un estado imposible' in mensajes[1]
 
 
+def test_run_sistema_incompatible(caplog):
+    # @formatter:off
+    with (patch('sys.argv', ['soyyo', '--test']),
+          caplog.at_level(logging.DEBUG),
+          patch('soyyo.app.comprobar_estado', return_value=EstadoApp.SISTEMA_INCOMPATIBLE)):
+        # @formatter:on
+        with pytest.raises(SystemExit) as exc:
+            main()
+    mensajes = [r.message for r in caplog.records]
+    assert exc.value.code == 1
+    assert len(mensajes) == 1
+    assert 'Estado inicial: Sistema incompatible (no linux o no terminal)' in mensajes
+
+
 def test_run_sin_keyring(caplog):
     # @formatter:off
     with (patch('sys.argv', ['soyyo', '--test']),

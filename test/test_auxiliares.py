@@ -13,7 +13,8 @@ import keyring.errors as keyring_errors
 import pytest
 
 from soyyo.auxiliares import (autorizame, captura_teclado, cargar_y_verificar_almacen, check_almacen,
-                              check_keyring, detectar_usb, guardar_json, muestra_tabla, reintentar_keyring,
+                              check_keyring, check_sistema, detectar_usb, guardar_json, muestra_tabla,
+                              reintentar_keyring,
                               selecciona_ruta, Usable,
                               validar_pin)
 from soyyo.constantes import BaseTabla, EstadoApp
@@ -167,6 +168,26 @@ def test_reintentar_keyring_error_desconocido():
         func_decorada('servicio', 'usuario')
 
     assert mock_func.call_count == 1  # no reintenta
+
+
+def test_check_sistema_todo_OK():
+    with (patch('soyyo.auxiliares.sys.platform', new='linux'),
+          patch('soyyo.auxiliares.sys.stdout.isatty', return_value=True)):
+        assert check_sistema() is True
+
+
+def test_check_sistema_error_SO():
+    with (patch('soyyo.auxiliares.sys.platform', new='win32'),
+          patch('soyyo.auxiliares.sys.stdout.isatty', return_value=True) as mock_funcion):
+        assert check_sistema() is False
+        mock_funcion.assert_not_called()
+
+
+def test_check_sistema_error_terminal():
+    with (patch('soyyo.auxiliares.sys.platform', new='linux'),
+          patch('soyyo.auxiliares.sys.stdout.isatty', return_value=False) as mock_funcion):
+        assert check_sistema() is False
+        mock_funcion.assert_called_with()
 
 
 def test_chek_keyring_funciona_bien():
