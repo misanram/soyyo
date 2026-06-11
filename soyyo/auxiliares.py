@@ -414,13 +414,13 @@ def muestra_tabla(lista_datos, primer_elemento=0, ultimo_elemento=5):
             return inicio + ''.join(f'{formatear(clave, valor)}{medio if valor[0] < columnas else fin}'
                                     for clave, valor in datos.items())
 
-        tb0 = _linea_tabla(len(fields(clase)), '╔', '╤', '╗', clase.max_len)
-        tb1 = _linea_tabla(len(fields(clase)), '╠', '╪', '╢', clase.max_len)
-        tb2 = _linea_tabla(len(fields(clase)), '╚', '╧', '╝', clase.max_len)
+        tb0 = _linea_tabla(len(fields(clase)) - 1, '╔', '╤', '╗', clase.max_len)
+        tb1 = _linea_tabla(len(fields(clase)) - 1, '╠', '╪', '╢', clase.max_len)
+        tb2 = _linea_tabla(len(fields(clase)) - 1, '╚', '╧', '╝', clase.max_len)
         tmp = dict(zip((campo.name for campo in fields(clase)),
                        enumerate(clase.max_len.values())))
         formato = lambda clave, valor: f'{clave.capitalize():^{valor[1] + 2}}'
-        tit = _linea_texto(len(fields(clase)), '║', '|', '║', tmp, formato)
+        tit = _linea_texto(len(fields(clase)) - 1, '║', '|', '║', tmp, formato)
 
         print(tb0)
         print(tit)
@@ -429,7 +429,7 @@ def muestra_tabla(lista_datos, primer_elemento=0, ultimo_elemento=5):
         for instancia in lista_datos[primer_elemento:ultimo_elemento]:
             tmp = dict(zip((getattr(instancia, campo.name) for campo in fields(clase)),
                            enumerate(clase.max_len.values())))
-            txt = _linea_texto(len(fields(clase)), '║', '|', '║', tmp, formato)
+            txt = _linea_texto(len(fields(clase)) - 1, '║', '|', '║', tmp, formato)
             print(txt)
         print(tb2)
 
@@ -452,11 +452,11 @@ def selecciona_ruta():
             print(MSG_SIN_DISPOSITIVO)
             return ''
         fin = min(inicio + 5, len(rutas))
-        print(f'\nMostrando {inicio + 1}-{fin} de {len(rutas)} dispositivos')
+        print(f'\nMostrando los dispositivos del {inicio + 1} al {fin}')
         muestra_tabla(rutas, inicio, inicio + 5)
-        print(
-                f'[S] Página Siguiente [A] Página Anterior\n[C] Cancelar\n[{inicio + 1}-{fin}] Elegir '
-                f'dispositivo ', end='')
+        print(f'Hay {len(rutas)} dispositivo{'s' if len(rutas) > 1 else ''}\n'
+              f'[S] Página Siguiente [A] Página Anterior\n[C] Cancelar\n'
+              f'[{fin if inicio + 1 == fin else f"{inicio + 1}-{fin}"}] Elegir dispositivo ', end='')
         entrada = captura_teclado(dispara='acsACS').decode()
         if entrada in 'aA':
             inicio -= 5
