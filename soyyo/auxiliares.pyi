@@ -1,15 +1,18 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, ClassVar
+
+from .constantes import BaseTabla
 
 
 @dataclass
-class Usable:
-    codigo: str
+class Usable(BaseTabla):
+    max_len: ClassVar[dict]
+    instancias: ClassVar[int]
     ruta: str
     capacidad: str
 
-    def _campos_requeridos(self) -> list: ...
+    def _campos_especificios(self) -> list: ...
 
 
 def reintentar_keyring(intentos: int, espera: float) -> Callable: ...

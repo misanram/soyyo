@@ -1,6 +1,6 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
 
 from PySide6.QtCore import Qt
 
@@ -21,16 +21,16 @@ class EstadoApp(Enum):
 
 @dataclass
 class BaseTabla:
-    codigo: str
-    max_len: dict
-    instancias: int
 
-    def _campos_requeridos(self) -> list: ...
+    codigo: str
 
     def __post_init__(self) -> None: ...
 
+
+    def _campos_especificios(self) -> list:
+
     @classmethod
-    def __init_subclass__(cls, **kwargs: Any) -> None: ...
+    def reset(cls) -> None: ...
 
 
 class Zona(Enum):

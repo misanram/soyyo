@@ -6,6 +6,7 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import call, MagicMock, patch
 
 import keyring.errors as keyring_errors
@@ -23,11 +24,13 @@ from .fixtures import almacen_valido
 def test_BaseTabla_OK_con_parametros():
     @dataclass
     class MiClass(BaseTabla):
+        max_len: ClassVar[dict] = {}
+        instancias: ClassVar[int] = 0
         campo1: str = ''
         campo2: str = ''
         campooo3: str = ''
 
-        def _campos_requeridos(self):
+        def _campos_especificios(self):
             return ['campo1', 'campo2', 'campooo3']
 
     for _ in range(5):
@@ -44,10 +47,12 @@ def test_BaseTabla_OK_con_parametros():
 def test_BaseTabla_OK_sin_parametros():
     @dataclass
     class MiClass(BaseTabla):
+        max_len: ClassVar[dict] = {}
+        instancias: ClassVar[int] = 0
         campo1: str = ''
         campo2: str = ''
 
-        def _campos_requeridos(self):
+        def _campos_especificios(self):
             return ['campo1', 'campo2']
 
     test = MiClass()  # type: ignore
@@ -62,7 +67,7 @@ def test_BaseTabla_TypeError():
         campo0: str = ''
         campo2: str = ''
 
-        def _campos_requeridos(self):
+        def _campos_especificios(self):
             return ['campo1', 'campo2']
 
     with pytest.raises(TypeError):
@@ -77,7 +82,7 @@ def test_BaseTabla_AttributeError():
         campo1: str = ''
         campo2: str = ''
 
-        def _campos_requeridos(self):
+        def _campos_especificios(self):
             return ['campo0', 'campo2']
 
     with pytest.raises(AttributeError):
@@ -793,12 +798,16 @@ def test_muestra_tabla(capsys, inicio, fin, longitud):
 
 def test_detectar_usb():
     mock_resultado = MagicMock(returncode=0,
-                               stdout='''{"blockdevices": [{"children": [{"mountpoint": 
-                               "/Directorio/que/vale","size": "22,2G"}]}]}''')
+                               stdout='{"blockdevices": [{"children": [{'
+                                      '"mountpoint":"/Directorio/que/vale","size": "11,1G"}]}]}')
     with (patch('soyyo.auxiliares.subprocess.run', return_value=mock_resultado),
           patch('soyyo.auxiliares.os.access', return_value=True)):
         resultado = detectar_usb()
-        assert len(resultado) == 1
+        assert Usable.instancias == len(resultado)
+        resultado = detectar_usb()
+        assert Usable.instancias == len(resultado)
+        resultado = detectar_usb()
+        assert Usable.instancias == len(resultado)
 
 
 def test_detectar_usb_sin_rutas():

@@ -1,10 +1,8 @@
 """
 Definición de clases y costantes auxiliares (estados, errores, etc)
 """
-
 from dataclasses import dataclass, fields
 from enum import Enum
-from typing import ClassVar
 
 from PySide6.QtCore import Qt
 
@@ -60,12 +58,10 @@ class BaseTabla:
     """
 
     codigo: str = ''
-    max_len: ClassVar[dict] = {}
-    instancias: ClassVar[int] = 0
 
     def __post_init__(self):
         clase = type(self)
-        if all(getattr(self, c) for c in self._campos_requeridos()):
+        if all(getattr(self, c) for c in self._campos_especificios()):
             clase.instancias += 1  # instancias de la subclase, no de la base
             self.codigo = str(clase.instancias)
             for campo in fields(self):
@@ -73,12 +69,15 @@ class BaseTabla:
                 clase.max_len[campo.name] = max(clase.max_len.get(campo.name, len(campo.name)), len(valor))
 
     @classmethod
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        cls.max_len = {}
-        cls.instancias = 0
+    def reset(cls):
+        """
+        Reinicia los atributos de clase.
+        """
 
-    def _campos_requeridos(self) -> list:
+        cls.instancias = 0
+        cls.max_len = {}
+
+    def _campos_especificios(self) -> list:
         """
         Cada subclase debe sobreescribir este método y definir qué campos deben tener valor.
         """

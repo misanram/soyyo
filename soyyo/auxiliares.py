@@ -18,7 +18,7 @@ from dataclasses import dataclass, fields, is_dataclass
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from string import digits
-from typing import Any
+from typing import Any, ClassVar
 
 import keyring
 import keyring.errors as keyring_errors
@@ -47,10 +47,12 @@ class Usable(BaseTabla):
     unidad a grabar la clave maestra.
     """
 
+    max_len: ClassVar[dict] = {}
+    instancias: ClassVar[int] = 0
     ruta: str = ''
     capacidad: str = ''
 
-    def _campos_requeridos(self):
+    def _campos_especificios(self):
         return ['ruta', 'capacidad']
 
 
@@ -166,12 +168,12 @@ def captura_teclado(prompt='', una_tecla=False, setup=False, pin=False, dispara=
                         sys.stdout.write('\x07')  # campana
                         sys.stdout.flush()
                         continue
-                    if ch in (b'\n', b'\r'):
+                    if ch[0] in (10, 13):  # Retorno de carro y salto de linea
                         break
                     elif chr(ch[0]) in dispara:  # Un único carácter (en dispara) termina el bucle
                         data = ch
                         break
-                    elif ch == b'\x7f':  # backspace
+                    elif ch[0] == 127:  # retroceso
                         if data:
                             data.pop()
                             sys.stdout.write('\b \b')  # retrocede, sobreescribe con espacio, retrocede
@@ -376,6 +378,8 @@ def detectar_usb():
                             capture_output=True, text=True)
     if result.returncode != 0:
         raise Exception(result.stderr)
+
+    Usable.reset()
 
     usables = []
     for _ in json.loads(result.stdout)["blockdevices"]:
