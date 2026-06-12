@@ -471,8 +471,11 @@ def selecciona_ruta():
         print(f'\nMostrando los dispositivos del {inicio + 1} al {fin}')
         muestra_tabla(rutas, inicio, inicio + 5)
         print(f'Hay {len(rutas)} dispositivo{'s' if len(rutas) > 1 else ''}\n'
-              f'[S] Página Siguiente [A] Página Anterior\n[C] Cancelar\n'
-              f'[{fin if inicio + 1 == fin else f"{inicio + 1}-{fin}"}] Elegir dispositivo ', end='')
+              f'[\033[1;97mS\033[m] Página Siguiente '
+              f'[\033[1;97mA\033[m] Página Anterior\n'
+              f'[\033[1;97mC\033[m] Cancelar\n'
+              f'[\033[1;97m{fin if inicio + 1 == fin else f"{inicio + 1}-{fin}"}\033[m] Elegir dispositivo ',
+              end='')
         entrada = captura_teclado(dispara='acsACS').decode()
         if entrada in 'aA':
             inicio -= 5
