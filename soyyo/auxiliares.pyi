@@ -6,13 +6,12 @@ from .constantes import BaseTabla
 
 
 @dataclass
-class Usable(BaseTabla):
+class PuntoMontaje(BaseTabla):
     max_len: ClassVar[dict]
     instancias: ClassVar[int]
     ruta: str
     capacidad: str
-
-    def _campos_especificios(self) -> list: ...
+    externo: bool
 
 
 def reintentar_keyring(intentos: int, espera: float) -> Callable: ...
@@ -46,7 +45,13 @@ def cargar_y_verificar_almacen(data_path: Path) -> dict: ...
 def autorizame(data_path: Path) -> tuple: ...
 
 
-def detectar_usb() -> list[Usable]: ...
+def _es_candidato(particion: dict) -> bool: ...
+
+
+def _es_externo(unidad: dict) -> str: ...
+
+
+def detectar_usb() -> list[PuntoMontaje]: ...
 
 
 def muestra_tabla(lista_datos: list, primer_elemento: int | None = ..., ultimo_elemento: int | None = ...) \

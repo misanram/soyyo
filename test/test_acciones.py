@@ -200,28 +200,29 @@ def test_comprobar_estado_error_inesperado(almacen_valido, caplog):
 
 def test_reset_keyboard_interrupt(tmp_path):
     fichero = tmp_path / 'datos.json'
-    with patch('soyyo.acciones.input', side_effect=KeyboardInterrupt):
+    with patch('soyyo.acciones.captura_teclado', side_effect=KeyboardInterrupt):
         assert reset(fichero) == EstadoApp.SALIENDO_OK
 
 
-@pytest.mark.parametrize('respuesta', ['N', 'C'])
+@pytest.mark.parametrize('respuesta', [b'N', b'n', b'C', b'c'])
 def test_reset_NC(tmp_path, respuesta):
     fichero = tmp_path / 'datos.json'
-    with patch('soyyo.acciones.input', return_value=respuesta):
+    with patch('soyyo.acciones.captura_teclado', return_value=respuesta):
         assert reset(fichero) == EstadoApp.SALIENDO_OK
 
 
 def test_reset_otro_caracter(tmp_path):
     fichero = tmp_path / 'datos.json'
-    with patch('soyyo.acciones.input', side_effect=['^', 'C']):
+    with patch('soyyo.acciones.captura_teclado', side_effect=[b'^', b'C']):
         assert reset(fichero) == EstadoApp.SALIENDO_OK
 
 
-def test_reset_S(tmp_path):
+@pytest.mark.parametrize('respuesta', [b'S', b's'])
+def test_reset_S(tmp_path, respuesta):
     fichero = tmp_path / 'datos.json'
     fichero.touch()
     # @formatter:off
-    with (patch('soyyo.acciones.input', return_value='S'),
+    with (patch('soyyo.acciones.captura_teclado', return_value=respuesta),
           patch('soyyo.acciones.keyring.delete_password', return_value=None)):
         # @formatter:on
         respuesta = reset(fichero)
@@ -232,7 +233,7 @@ def test_reset_S_keyring_error(tmp_path):
     fichero = tmp_path / 'datos.json'
     fichero.touch()
     # @formatter:off
-    with (patch('soyyo.acciones.input', return_value='S'),
+    with (patch('soyyo.acciones.captura_teclado', return_value=b'S'),
           patch('soyyo.acciones.keyring.delete_password', side_effect=keyring_errors.PasswordDeleteError)):
         # @formatter:on
         respuesta = reset(fichero)

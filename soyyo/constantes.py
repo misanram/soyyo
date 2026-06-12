@@ -62,12 +62,11 @@ class BaseTabla:
 
     def __post_init__(self):
         clase = type(self)
-        if all(getattr(self, c) for c in self._campos_especificios()):
-            clase.instancias += 1  # instancias de la subclase, no de la base
-            self.codigo = str(clase.instancias)
-            for campo in fields(self):
-                valor = getattr(self, campo.name)
-                clase.max_len[campo.name] = max(clase.max_len.get(campo.name, len(campo.name)), len(valor))
+        clase.instancias += 1  # instancias de la subclase, no de la base
+        self.codigo = str(clase.instancias)
+        for campo in fields(self):
+            valor = getattr(self, campo.name)
+            clase.max_len[campo.name] = max(clase.max_len.get(campo.name, len(campo.name)), len(valor))
 
     @classmethod
     def reset(cls):
@@ -77,13 +76,6 @@ class BaseTabla:
 
         cls.instancias = 0
         cls.max_len = {}
-
-    def _campos_especificios(self) -> list:
-        """
-        Cada subclase debe sobreescribir este método y definir qué campos deben tener valor.
-        """
-
-        raise NotImplementedError
 
 
 CURSORES = {Zona.BORDE_SUPERIOR: Qt.CursorShape.SizeVerCursor,

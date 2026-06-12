@@ -42,3 +42,11 @@ class SinRutaLlaveError(AppError):
     """
 
     pass
+
+
+class ExcLsblkError(AppError):
+    """
+    Error al ejecutar lsblk
+    """
+
+    pass

@@ -330,17 +330,16 @@ def reset(data_path):
         try:
             print(MSG_CABECERA)
             print(MSG_PROMPT_RESET, end='')
-            entrada = captura_teclado(dispara='csnCSN').decode()
-            if entrada in 'sS':
+            entrada = captura_teclado(dispara='csnCSN').decode().upper()
+            if entrada == 'S':
                 data_path.unlink(missing_ok=True)
                 try:
                     keyring.delete_password('soyyo', 'pepper')
                 except keyring_errors.PasswordDeleteError:
                     pass
                 print(MSG_RESET_REALIZADO)
-            elif entrada in 'nN':
-                raise KeyboardInterrupt
-            elif entrada in 'cC':
+                break
+            elif entrada in ('N', 'C'):
                 raise KeyboardInterrupt
         except KeyboardInterrupt:
             print(MSG_CANCELADO_USUARIO)

@@ -24,7 +24,7 @@ import keyring
 import keyring.errors as keyring_errors
 
 from .constantes import BaseTabla, EstadoApp, TIEMPO_DE_BLOQUEO
-from .errores import AppError, FirmaInvalidaError, PepperNotFoundError
+from .errores import AppError, ExcLsblkError, FirmaInvalidaError, PepperNotFoundError
 from .mensajes import (MSG_CABECERA, MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
                        MSG_ERROR_LECTURA_ESCRITURA_ALMACEN_DATOS, MSG_FIRMA_INVALIDA, MSG_SIN_DISPOSITIVO,
                        MSG_SIN_PEPPER)
@@ -33,7 +33,7 @@ log = logging.getLogger(__name__)
 
 
 @dataclass
-class Usable(BaseTabla):
+class PuntoMontaje(BaseTabla):
     """
     Rutas usables
     Esta clase se usa para almacenar las rutas en las que se peude grabar el fichero con la clave maestra
@@ -51,9 +51,7 @@ class Usable(BaseTabla):
     instancias: ClassVar[int] = 0
     ruta: str = ''
     capacidad: str = ''
-
-    def _campos_especificios(self):
-        return ['ruta', 'capacidad']
+    externo: str = ''
 
 
 def reintentar_keyring(intentos=3, espera=0.2):
@@ -385,6 +383,40 @@ def autorizame(data_path):
         return False, None, EstadoApp.FICHERO_CORRUPTO
 
 
+def _es_candidato(particion: dict) -> bool:
+    """
+    Determina si una partición es candidata a ser navegable.
+    """
+
+    FSTYPES_EXCLUIDOS = frozenset({"swap", "iso9660", "squashfs"})
+    TYPES_EXCLUIDOS = frozenset({"rom", "loop"})
+
+    return (
+            particion.get('fstype') not in FSTYPES_EXCLUIDOS
+            and particion.get('type') not in TYPES_EXCLUIDOS
+            and particion.get('mountpoint') is not None
+            and os.access(particion.get('mountpoint', ''), os.R_OK + os.F_OK)
+    )
+
+
+def _es_externo(unidad):
+    """
+    Determina si una unidad es externa.
+    """
+
+    return bool(unidad.get('rm')) or unidad.get('tran') == 'usb'
+
+
+def _si_no(boleano):
+    """
+    Transforma un booleano en una cadena de texto
+    """
+
+    if boleano:
+        return 'Sí'
+    return 'No'
+
+
 def detectar_usb():
     """
     Crea una lista con los puntos de montaje disponibles para usar.
@@ -393,18 +425,19 @@ def detectar_usb():
     result = subprocess.run(['/usr/bin/lsblk', '-J', '-o', 'NAME,TRAN,MOUNTPOINT,LABEL,SIZE,RM'],
                             capture_output=True, text=True)
     if result.returncode != 0:
-        raise Exception(result.stderr)
+        raise ExcLsblkError(result.stderr)
 
-    Usable.reset()
+    PuntoMontaje.reset()
 
-    usables = []
-    for _ in json.loads(result.stdout)["blockdevices"]:
-        particiones = _.get('children', [{}])
-        for particion in particiones:
-            punto_montaje = particion.get('mountpoint')
-            if punto_montaje and os.access(punto_montaje, os.W_OK):
-                usables.append(Usable(ruta=punto_montaje, capacidad=particion.get('size')))  # type: ignore
-    return usables
+    detectados = []
+    for unidad in json.loads(result.stdout)['blockdevices']:
+        for particion in unidad.get('children', [{}]):
+            punto_montaje = particion.get('mountpoint', '')
+            if _es_candidato(particion):
+                detectados.append(PuntoMontaje(ruta=punto_montaje,
+                                               capacidad=particion.get('size', ''),
+                                               externo=_si_no(_es_externo(unidad))))
+    return detectados
 
 
 def muestra_tabla(lista_datos, primer_elemento=0, ultimo_elemento=5):
@@ -461,8 +494,6 @@ def selecciona_ruta():
     inicio = 0
     rutas = detectar_usb()
     while True:
-        if sys.stdout.isatty():
-            print('\033c', end='')  # pragma: no cover
         print(MSG_CABECERA)
         if not rutas:
             print(MSG_SIN_DISPOSITIVO)
@@ -476,14 +507,14 @@ def selecciona_ruta():
               f'[\033[1;97mC\033[m] Cancelar\n'
               f'[\033[1;97m{fin if inicio + 1 == fin else f"{inicio + 1}-{fin}"}\033[m] Elegir dispositivo ',
               end='')
-        entrada = captura_teclado(dispara='acsACS').decode()
-        if entrada in 'aA':
+        entrada = captura_teclado(dispara='acsACS').decode().upper()
+        if entrada == 'A':
             inicio -= 5
             inicio = max(inicio, 0)
-        elif entrada in 'sS':
+        elif entrada == 'S':
             if inicio + 5 < len(rutas):
                 inicio += 5
-        elif entrada in 'cC':
+        elif entrada == 'C':
             raise KeyboardInterrupt
         elif entrada.isdigit():
             if inicio + 1 <= int(entrada) <= fin:

@@ -15,3 +15,6 @@ class CapturaError(AppError):
 
 
 class SinRutaLlaveError(AppError): ...
+
+
+class ExcLsblkError(AppError): ...

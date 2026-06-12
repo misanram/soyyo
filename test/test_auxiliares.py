@@ -14,9 +14,7 @@ import pytest
 
 from soyyo.auxiliares import (autorizame, captura_teclado, cargar_y_verificar_almacen, check_almacen,
                               check_keyring, check_sistema, detectar_usb, guardar_json, muestra_tabla,
-                              reintentar_keyring,
-                              selecciona_ruta, Usable,
-                              validar_pin)
+                              PuntoMontaje, reintentar_keyring, selecciona_ruta, validar_pin)
 from soyyo.constantes import BaseTabla, EstadoApp
 from soyyo.errores import AppError, FirmaInvalidaError, PepperNotFoundError
 from .fixtures import almacen_valido
@@ -31,11 +29,8 @@ def test_BaseTabla_OK_con_parametros():
         campo2: str = ''
         campooo3: str = ''
 
-        def _campos_especificios(self):
-            return ['campo1', 'campo2', 'campooo3']
-
     for _ in range(5):
-        test = MiClass(campo1='valor_muy_largo', campo2='campo2', campooo3='campo3')  # type: ignore
+        test = MiClass(campo1='valor_muy_largo', campo2='campo2', campooo3='campo3')
 
     assert MiClass.instancias == 5
     assert MiClass.max_len['campo1'] == len('valor_muy_largo')
@@ -53,77 +48,34 @@ def test_BaseTabla_OK_sin_parametros():
         campo1: str = ''
         campo2: str = ''
 
-        def _campos_especificios(self):
-            return ['campo1', 'campo2']
-
     test = MiClass()  # type: ignore
 
     assert test.campo1 == ''
-    assert MiClass.instancias == 0
-
-
-def test_BaseTabla_TypeError():
-    @dataclass
-    class MiClass(BaseTabla):
-        campo0: str = ''
-        campo2: str = ''
-
-        def _campos_especificios(self):
-            return ['campo1', 'campo2']
-
-    with pytest.raises(TypeError):
-        test = MiClass(campo1='campo1', campo2='campo2')  # type: ignore
-
-        assert test.campo1 == 'campo1'  # type: ignore
-
-
-def test_BaseTabla_AttributeError():
-    @dataclass
-    class MiClass(BaseTabla):
-        campo1: str = ''
-        campo2: str = ''
-
-        def _campos_especificios(self):
-            return ['campo0', 'campo2']
-
-    with pytest.raises(AttributeError):
-        test = MiClass(campo1='campo1', campo2='campo2')  # type: ignore
-
-        assert test.campo1 == 'campo1'
-
-
-def test_BaseTabla_NotImplementedError():
-    @dataclass
-    class MiClass(BaseTabla):
-        campo1: str = ''
-        campo2: str = ''
-
-    with pytest.raises(NotImplementedError):
-        MiClass(campo1='campo1', campo2='campo2')  # type: ignore
+    assert MiClass.instancias == 1
 
 
 def test_usable_max_len():
-    Usable.instancias = 0
-    Usable.max_len = {}
+    PuntoMontaje.instancias = 0
+    PuntoMontaje.max_len = {}
     for _ in range(100):
-        Usable(ruta='/ruta/test', capacidad='100G')  # type: ignore
-    assert Usable.max_len['ruta'] == len('/ruta/test')
-    assert Usable.max_len['capacidad'] == len('capacidad')
-    assert Usable.instancias == 100
+        PuntoMontaje(ruta='/ruta/test', capacidad='100G')  # type: ignore
+    assert PuntoMontaje.max_len['ruta'] == len('/ruta/test')
+    assert PuntoMontaje.max_len['capacidad'] == len('capacidad')
+    assert PuntoMontaje.instancias == 100
 
 
 def test_usable_sin_parametros():
-    Usable.instancias = 0
-    Usable.max_len = {}
-    Usable()  # type: ignore
-    assert Usable.max_len.get('ruta') is None
-    assert Usable.max_len.get('capacidad') is None
-    assert Usable.instancias == 0
+    PuntoMontaje.instancias = 0
+    PuntoMontaje.max_len = {}
+    PuntoMontaje()  # type: ignore
+    assert PuntoMontaje.max_len.get('ruta') == 4
+    assert PuntoMontaje.max_len.get('capacidad') == 9
+    assert PuntoMontaje.instancias == 1
 
 
 def test_usable_parametros_malos():
     with pytest.raises(TypeError):
-        Usable(parametro='malo')  # type: ignore
+        PuntoMontaje(parametro='malo')  # type: ignore
 
 
 def test_reintentar_keyring_funciona():
@@ -794,17 +746,15 @@ def test_autorizame_error_lectura_fichero_almacen(almacen_valido):
                          [(0, 5, 1),
                           (0, 0, 1),
                           (5, 0, 1),
-                          (0, 5, 1),
                           (None, None, 1),
                           (0, 5, 10),
                           (0, 0, 10),
                           (5, 0, 10),
-                          (0, 5, 10),
                           (None, None, 10)])
 def test_muestra_tabla(capsys, inicio, fin, longitud):
     lista = []
     for _ in range(longitud):
-        lista.append(Usable(ruta='/ruta/test', capacidad='100'))  # type: ignore
+        lista.append(PuntoMontaje(ruta='/ruta/test', capacidad='100'))  # type: ignore
     muestra_tabla(lista, inicio, fin)
     captured = capsys.readouterr()
 
@@ -820,16 +770,21 @@ def test_muestra_tabla(capsys, inicio, fin, longitud):
 
 def test_detectar_usb():
     mock_resultado = MagicMock(returncode=0,
-                               stdout='{"blockdevices": [{"children": [{'
-                                      '"mountpoint":"/Directorio/que/vale","size": "11,1G"}]}]}')
+                               stdout='{"blockdevices":[{"tran":"sata","mountpoint":null,"size":"11,1G",'
+                                      '"rm":false,"fstype":null,"type":"disk","children":[{"tran":null,'
+                                      '"mountpoint":"/ruta/valida/","size":"11,1G","rm":false,'
+                                      '"fstype":"ext4","type":"part"}]},{"tran":"usb","mountpoint":null,'
+                                      '"size":"2,2G","rm":true,"fstype":null,"type":"disk","children":[{'
+                                      '"tran":null,"mountpoint":"/ruta/tambien/valida","size":"2,2G",'
+                                      '"rm":true,"fstype":"vfat","type":"part"}]}]}')
     with (patch('soyyo.auxiliares.subprocess.run', return_value=mock_resultado),
           patch('soyyo.auxiliares.os.access', return_value=True)):
         resultado = detectar_usb()
-        assert Usable.instancias == len(resultado)
+        assert PuntoMontaje.instancias == len(resultado)
         resultado = detectar_usb()
-        assert Usable.instancias == len(resultado)
+        assert PuntoMontaje.instancias == len(resultado)
         resultado = detectar_usb()
-        assert Usable.instancias == len(resultado)
+        assert PuntoMontaje.instancias == len(resultado)
 
 
 def test_detectar_usb_sin_rutas():
