@@ -47,6 +47,11 @@ MSG_ERROR_NO_CONTROLADO = """
     Consulte a su proveedor.
     """
 
+MSG_CANCELADO_USUARIO = """
+    
+    Acción cancelada por el usuario.
+    """
+
 ###### Mensajes de la opción reset
 
 MSG_PROMPT_RESET = """
@@ -58,7 +63,7 @@ MSG_PROMPT_RESET = """
 
         Este paso es irreversible.
         
-        Si/No/Cancelar: """
+        [\033[1;97mS\033[m]i [\033[1;97mN\033[m]o [\033[1;97mC\033[m]ancelar """
 
 MSG_RESET_REALIZADO = """
 

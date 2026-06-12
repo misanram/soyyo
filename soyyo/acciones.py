@@ -29,12 +29,11 @@ from .auxiliares import (autorizame, captura_teclado, check_almacen, check_keyri
                          guardar_json, reintentar_keyring, selecciona_ruta)
 from .constantes import CURSORES, EstadoApp, Zona
 from .errores import CapturaError, FirmaInvalidaError, PepperNotFoundError, SinRutaLlaveError
-from .mensajes import (MSG_CABECERA, MSG_ERROR_APP_BLOQUEADA_TEMPORAL, MSG_ERROR_APP_BLOQUEDA,
-                       MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_FICHERO_CORRUPTO,
+from .mensajes import (MSG_CABECERA, MSG_CANCELADO_USUARIO, MSG_ERROR_APP_BLOQUEADA_TEMPORAL,
+                       MSG_ERROR_APP_BLOQUEDA, MSG_ERROR_CAPTURA, MSG_ERROR_DECODIFICA, MSG_FICHERO_CORRUPTO,
                        MSG_INSTRUCCIONES_SETUP, MSG_PIN_FICHERO_LLAVE, MSG_PIN_SETUP, MSG_PROMPT_RESET,
                        MSG_RESET_REALIZADO,
-                       MSG_SIN_PEPPER,
-                       MSG_TOTP_CAPTURADO)
+                       MSG_SIN_PEPPER, MSG_TOTP_CAPTURADO)
 
 BORDE = 8
 
@@ -330,21 +329,24 @@ def reset(data_path):
     while True:
         try:
             print(MSG_CABECERA)
-            data = input(MSG_PROMPT_RESET).upper().strip()
+            print(MSG_PROMPT_RESET, end='')
+            entrada = captura_teclado(dispara='csnCSN').decode()
+            if entrada in 'sS':
+                data_path.unlink(missing_ok=True)
+                try:
+                    keyring.delete_password('soyyo', 'pepper')
+                except keyring_errors.PasswordDeleteError:
+                    pass
+                print(MSG_RESET_REALIZADO)
+            elif entrada in 'nN':
+                raise KeyboardInterrupt
+            elif entrada in 'cC':
+                raise KeyboardInterrupt
         except KeyboardInterrupt:
-            data = 'C'
+            print(MSG_CANCELADO_USUARIO)
+            break
 
-        if len(data) != 1 or data not in 'NSC':
-            continue
-
-        if data == 'S':
-            data_path.unlink(missing_ok=True)
-            try:
-                keyring.delete_password('soyyo', 'pepper')
-            except keyring_errors.PasswordDeleteError:
-                pass
-            print(MSG_RESET_REALIZADO)
-        return EstadoApp.SALIENDO_OK
+    return EstadoApp.SALIENDO_OK
 
 
 def setup(data_path):
