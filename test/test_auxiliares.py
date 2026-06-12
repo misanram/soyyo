@@ -185,7 +185,8 @@ def test_check_sistema_error_SO():
 
 def test_check_sistema_error_terminal():
     with (patch('soyyo.auxiliares.sys.platform', new='linux'),
-          patch('soyyo.auxiliares.sys.stdout.isatty', return_value=False) as mock_funcion):
+          patch('soyyo.auxiliares.sys.stdout.isatty', return_value=False) as mock_funcion,
+          patch('soyyo.auxiliares.os.environ.get', return_value=None)):
         assert check_sistema() is False
         mock_funcion.assert_called_with()
 
