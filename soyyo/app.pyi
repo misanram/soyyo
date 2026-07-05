@@ -2,7 +2,16 @@ import argparse
 from pathlib import Path
 
 
-def get_options() -> argparse.Namespace: ...
+def configurar_locale() -> None: ...
+
+
+def configurar_logging() -> None: ...
+
+
+def configurar_i18n() -> None: ...
+
+
+def configura_argparser() -> argparse.Namespace: ...
 
 
 class Aplicacion:

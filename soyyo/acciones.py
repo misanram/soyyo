@@ -1,6 +1,5 @@
 """
-Acciones que reliza el programa
-
+Acciones que reaiza el programa
 """
 
 import base64
@@ -281,6 +280,7 @@ def comprobar_estado(data_path):
             datos = json.load(fin)
             firma = datos.pop('firma', None)
             if firma is None:
+                log.warning('No hay firma (Firma None)')
                 raise FirmaInvalidaError
         cadena_json = json.dumps(datos, sort_keys=True, separators=(',', ':')).encode()
         pepper = keyring.get_password('soyyo', 'pepper')
@@ -301,8 +301,10 @@ def comprobar_estado(data_path):
                     return EstadoApp.SALIENDO_OK
                 return EstadoApp.INICIALIZACION_CORRECTA
             else:
+                log.warning('Firma inválida.')
                 raise FirmaInvalidaError
         else:
+            log.warning('No hay Pepper (Pepper None)')
             raise PepperNotFoundError
     except FirmaInvalidaError:
         log.exception('No hay firma en el archivo o esta es inválida.')

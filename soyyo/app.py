@@ -16,23 +16,55 @@ from .constantes import EstadoApp
 from .mensajes import (MSG_ERROR_NO_CONTROLADO, MSG_FICHERO_CORRUPTO, MSG_FIRMA_INVALIDA, MSG_SALIENDO_ERROR,
                        MSG_SALIENDO_OK, MSG_SIN_KEYRING, MSG_SIN_PEPPER, MSG_SISTEMA_INCOMPATIBLE)
 
-locale.setlocale(locale.LC_ALL, '')
-
-file_handler = RotatingFileHandler(Path(sys.prefix) / '../soyyo.log', maxBytes=1_000_000, backupCount=5)
-logging.basicConfig(level=logging.WARNING,
-                    handlers=[file_handler],
-                    force=True,
-                    format='%(asctime)s %(levelname)-5.5s [%(name)s:%(lineno)s][%(threadName)s] %(message)s')
-logging.getLogger('soyyo').setLevel(logging.DEBUG)
 log = logging.getLogger(__name__)
 
-ruta_locales = Path(os.path.dirname(__file__)) / 'locales'
-traduccion = gettext.translation('messages', localedir=ruta_locales, languages=['es'], fallback=True)
-argparse._ = traduccion.gettext
-argparse.ngettext = traduccion.ngettext
+
+def configurar_locale():
+    """
+    Configurar locale
+    """
+
+    locale.setlocale(locale.LC_ALL, '')
 
 
-def get_options():
+def configurar_logging():
+    """
+    Configura el logging de la app
+    """
+
+    file_handler = RotatingFileHandler(Path(sys.prefix) / '../soyyo.log', maxBytes=1_000_000, backupCount=5)
+    logging.basicConfig(level=logging.WARNING,
+                        handlers=[file_handler],
+                        force=True,
+                        format='%(asctime)s %(levelname)-5.5s [%(name)s:%(lineno)s][%(threadName)s] %('
+                               'message)s')
+    logging.captureWarnings(True)
+    logger_warnings = logging.getLogger("py.warnings")
+    logger_warnings.propagate = False
+    logger_warnings.setLevel(logging.WARNING)
+    logger_warnings.addHandler(file_handler)
+    logging.getLogger('soyyo').setLevel(logging.DEBUG)
+
+
+def configurar_i18n():
+    """
+    Configura traducciones
+    """
+
+    locale_actual = locale.getlocale()[0]
+    if locale_actual is not None:
+        ruta_locales = Path(os.path.dirname(__file__)) / 'locales'
+        ruta_traducciones = f'{ruta_locales}/{locale_actual}/LC_MESSAGES/messages.mo'
+        if os.path.exists(ruta_traducciones):
+            traduccion = gettext.translation('messages', localedir=ruta_locales, languages=[locale_actual],
+                                             fallback=True)
+            setattr(argparse, '_', traduccion.gettext)
+            setattr(argparse, 'ngettext', traduccion.gettext)
+            return
+    log.warning('No se encontró traducción para %s', locale_actual)
+
+
+def configura_argparser():
     """
     Lee las opciones con las que se arranca el programa.
     """
@@ -56,8 +88,6 @@ class Aplicacion:
 
     def __init__(self, args):
         root_path = (Path(sys.prefix) / '../').resolve()
-        # bin_path = Path(sys.executable).parent
-        # self.app_executable = bin_path / 'soyyo'
         self.data_path = root_path / 'soyyo_data.json'
         self.args = args
 
@@ -134,8 +164,12 @@ def main():
     Arranca el programa
     """
 
-    parser = get_options()
+    configurar_locale()
+    configurar_logging()
+    configurar_i18n()
+    parser = configura_argparser()
     argumentos = parser.parse_args()
+
     if not any(vars(argumentos).values()):
         parser.print_help()
         log.debug('Aplicación llamada sin argumentos.')

@@ -10,14 +10,14 @@ from typing import ClassVar
 from unittest.mock import call, MagicMock, patch
 
 import keyring.errors as keyring_errors
-import pytest
+import pytest  # noqa
 
 from soyyo.auxiliares import (autorizame, captura_teclado, cargar_y_verificar_almacen, check_almacen,
                               check_keyring, check_sistema, detectar_usb, guardar_json, muestra_tabla,
                               PuntoMontaje, reintentar_keyring, selecciona_ruta, validar_pin)
 from soyyo.constantes import BaseTabla, EstadoApp
 from soyyo.errores import AppError, FirmaInvalidaError, PepperNotFoundError
-from .fixtures import almacen_valido
+from .conftest import almacen_valido
 
 
 def test_BaseTabla_OK_con_parametros():

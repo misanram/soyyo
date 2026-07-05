@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import keyring.errors as keyring_errors
-import pytest
+import pytest  # noqa
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, Qt
 from PySide6.QtGui import QMouseEvent, QPaintEvent
 from PySide6.QtWidgets import QApplication
@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QApplication
 from soyyo.acciones import captura, comprobar_estado, lista, reset, setup, VentanaCaptura
 from soyyo.constantes import CURSORES, EstadoApp, Zona
 from soyyo.errores import CapturaError
-from .fixtures import almacen_valido
+from .conftest import almacen_valido
 
 locale.setlocale(locale.LC_ALL, '')
 
@@ -72,19 +72,24 @@ def test_comprobar_estado_todo_ok(almacen_valido):
     assert respuesta == EstadoApp.INICIALIZACION_CORRECTA
 
 
-def test_comprobar_estado_sin_firma(almacen_valido):
+def test_comprobar_estado_sin_firma(almacen_valido, caplog):
     fichero, pepper = almacen_valido(firmar='NO')
     # @formatter:off
     with (patch('soyyo.acciones.check_sistema', return_value=True),
           patch('soyyo.acciones.check_keyring', return_value=True),
           patch('soyyo.acciones.check_almacen', return_value=True),
-          patch('soyyo.acciones.keyring.get_password', return_value=pepper)):
+          patch('soyyo.acciones.keyring.get_password', return_value=pepper),
+          caplog.at_level(logging.WARNING)):
         # @formatter:on
         respuesta = comprobar_estado(fichero)
     assert respuesta == EstadoApp.FIRMA_INVALIDA
+    mensajes = [r.message for r in caplog.records]
+    assert len(mensajes) == 2
+    assert 'No hay firma (Firma None)' in mensajes[0]
+    assert 'No hay firma en el archivo o esta es inválida.' in mensajes[1]
 
 
-def test_comprobar_estado_firma_mala(almacen_valido):
+def test_comprobar_estado_firma_mala(almacen_valido, caplog):
     fichero, pepper = almacen_valido(firmar='fake')
     # @formatter:off
     with (patch('soyyo.acciones.check_sistema', return_value=True),
@@ -94,6 +99,10 @@ def test_comprobar_estado_firma_mala(almacen_valido):
         # @formatter:on
         respuesta = comprobar_estado(fichero)
     assert respuesta == EstadoApp.FIRMA_INVALIDA
+    mensajes = [r.message for r in caplog.records]
+    assert len(mensajes) == 2
+    assert 'Firma inválida' in mensajes[0]
+    assert 'No hay firma en el archivo o esta es inválida.' in mensajes[1]
 
 
 def test_comprobar_estado_bloqueo_temporal(almacen_valido, caplog):
@@ -140,7 +149,7 @@ def test_comprobar_estado_bloqueo_permanente(almacen_valido, caplog):
     assert 'Aplicación bloqueada permanentemente.' in mensajes[0]
 
 
-def test_comprobar_estado_sin_pepper(almacen_valido):
+def test_comprobar_estado_sin_pepper(almacen_valido, caplog):
     fichero, pepper = almacen_valido()
     # @formatter:off
     with (patch('soyyo.acciones.check_sistema', return_value=True),
@@ -150,6 +159,10 @@ def test_comprobar_estado_sin_pepper(almacen_valido):
         # @formatter:on
         resultado = comprobar_estado(fichero)
     assert resultado == EstadoApp.SIN_PEPPER
+    mensajes = [r.message for r in caplog.records]
+    assert len(mensajes) == 2
+    assert 'No hay Pepper (Pepper None)' in mensajes[0]
+    assert 'get_password no devuelve el pepper' in mensajes[1]
 
 
 def test_comprobar_estado_error_JSON(almacen_valido, caplog):
@@ -188,14 +201,14 @@ def test_comprobar_estado_error_inesperado(almacen_valido, caplog):
     fichero, pepper = almacen_valido()
     # @formatter:off
     with (patch('soyyo.acciones.check_sistema', return_value=True),
-          patch('soyyo.acciones.check_keyring', side_effect=Exception),
+          patch('soyyo.acciones.check_keyring', side_effect=RuntimeError),
           caplog.at_level(logging.ERROR)):
         # @formatter:on
         with pytest.raises(Exception):
             comprobar_estado(fichero)
         mensajes = [r.message for r in caplog.records]
         assert len(mensajes) == 1
-        assert 'Error indeterminado en el proceso de comprobar_estado.' in mensajes[0]
+        assert 'Error indeterminado en el proceso de comprobar_estado' in mensajes[0]
 
 
 def test_reset_keyboard_interrupt(tmp_path):

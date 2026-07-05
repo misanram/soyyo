@@ -1,6 +1,7 @@
 """
 Definición de clases y costantes auxiliares (estados, errores, etc)
 """
+
 from dataclasses import dataclass, fields
 from enum import Enum
 
@@ -49,24 +50,28 @@ class BaseTabla:
     Esta clase se usa para almacenar los datos que se van a emplear en algunas tablas que se muestran en la
     app.
 
+    Clase base para tablas. No instanciar directamente.
+    Usar las clases derivadas que sobreescriban _campos_requeridos.
     max_len es un diccionario que contiene la longitud máxima del valor los atributos:
         la clave es el nombre del atributo (ruta y longitud en este caso)
         el valor es la longitud máxima del valor del atributo (es un literal) siendo el mínimo la longitud
         del nombre del atributo (4 y 9 en este caso)
     Este diccionario se usa para calcular las dimensiones de la tabla que se muestra en la selección de la
     unidad a grabar la clave maestra.
-    El método _campos_requeridos debe ser sobreescrito para que la clase funcione.
     """
 
     codigo: str = ''
 
     def __post_init__(self):
         clase = type(self)
-        clase.instancias += 1  # instancias de la subclase, no de la base
-        self.codigo = str(clase.instancias)
+        if clase is BaseTabla:
+            raise NotImplementedError('BaseTabla es una clase base, no debe instanciarse directamente')
+        clase.instancias += 1  # type: ignore # instancias de la subclase, no de la base
+        self.codigo = str(clase.instancias)  # type: ignore
         for campo in fields(self):
             valor = getattr(self, campo.name)
-            clase.max_len[campo.name] = max(clase.max_len.get(campo.name, len(campo.name)), len(valor))
+            clase.max_len[campo.name] = max(clase.max_len.get(campo.name, len(campo.name)),  # type: ignore
+                                            len(valor))
 
     @classmethod
     def reset(cls):

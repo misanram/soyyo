@@ -1,15 +1,16 @@
 """
-Fixtures usadas en los test.
+Fixtures que se usan en los test.
 """
 
 import base64
 import hashlib
 import hmac
 import json
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 
-import pytest
+import pytest  # noqa
 
 
 @pytest.fixture
@@ -56,3 +57,40 @@ def almacen_valido(tmp_path):
         return fichero, pepper_64
 
     return _factory
+
+
+@pytest.fixture(autouse=True)
+def reset_logging():
+    """Resetea el logging para que funcionen los test que tienen algo que ver."""
+
+    # --- LIMPIEZA ANTES DEL TEST ---
+    # Guardamos el estado actual
+    original_handlers = logging.root.handlers[:]
+    original_level = logging.root.level
+
+    # Limpiamos todo
+    logging.root.handlers.clear()
+    logging.root.setLevel(logging.NOTSET)
+    logging.captureWarnings(False)
+
+    # Limpiamos loggers específicos
+    for name in ('py.warnings', 'soyyo'):
+        logger = logging.getLogger(name)
+        logger.handlers.clear()
+        logger.propagate = True
+        logger.setLevel(logging.NOTSET)
+
+    yield  # Aquí se ejecuta el test
+
+    # --- RESTAURACIÓN DESPUÉS DEL TEST ---
+    logging.root.handlers.clear()
+    logging.root.handlers.extend(original_handlers)
+    logging.root.setLevel(original_level)
+
+
+@pytest.fixture
+def prefix_temporal(tmp_path, monkeypatch):
+    """Ruta temporal para crear el fichero del log."""
+
+    (tmp_path / 'prefix').mkdir()
+    monkeypatch.setattr('sys.prefix', str(tmp_path / 'prefix'))
