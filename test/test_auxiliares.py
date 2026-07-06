@@ -20,38 +20,44 @@ from soyyo.errores import AppError, FirmaInvalidaError, PepperNotFoundError
 from .conftest import almacen_valido
 
 
+def test_instanciar_BaseTabla():
+    with pytest.raises(NotImplementedError):
+        BaseTabla()
+
+
 def test_BaseTabla_OK_con_parametros():
     @dataclass
-    class MiClass(BaseTabla):
+    class _TestClass(BaseTabla):
         max_len: ClassVar[dict] = {}
         instancias: ClassVar[int] = 0
         campo1: str = ''
         campo2: str = ''
         campooo3: str = ''
 
+    test = None
     for _ in range(5):
-        test = MiClass(campo1='valor_muy_largo', campo2='campo2', campooo3='campo3')
+        test = _TestClass(campo1='valor_muy_largo', campo2='campo2', campooo3='campo3')
 
-    assert MiClass.instancias == 5
-    assert MiClass.max_len['campo1'] == len('valor_muy_largo')
-    assert MiClass.max_len['campo2'] == len('campo2')
-    assert MiClass.max_len['campooo3'] == len('campooo3')
+    assert _TestClass.instancias == 5
+    assert _TestClass.max_len['campo1'] == len('valor_muy_largo')
+    assert _TestClass.max_len['campo2'] == len('campo2')
+    assert _TestClass.max_len['campooo3'] == len('campooo3')
     assert test.campo1 == 'valor_muy_largo'
     assert test.codigo == '5'
 
 
 def test_BaseTabla_OK_sin_parametros():
     @dataclass
-    class MiClass(BaseTabla):
+    class _TestClass(BaseTabla):
         max_len: ClassVar[dict] = {}
         instancias: ClassVar[int] = 0
         campo1: str = ''
         campo2: str = ''
 
-    test = MiClass()  # type: ignore
+    test = _TestClass()  # type: ignore
 
     assert test.campo1 == ''
-    assert MiClass.instancias == 1
+    assert _TestClass.instancias == 1
 
 
 def test_usable_max_len():

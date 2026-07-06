@@ -3,7 +3,6 @@ Tests del módulo app.py
 """
 import argparse
 import importlib.util
-import locale
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
@@ -12,15 +11,9 @@ from unittest.mock import patch
 
 import pytest  # noqa
 
-from soyyo.app import (Aplicacion, configura_argparser, configurar_i18n, configurar_locale,
-                       configurar_logging, main)
+from soyyo.app import (Aplicacion, configura_argparser, configurar_i18n, configurar_logging, main)
 from soyyo.constantes import EstadoApp
 from .conftest import prefix_temporal
-
-
-def test_configurar_locale():
-    configurar_locale()
-    assert locale.getlocale() != (None, None)
 
 
 def test_configurar_i18n_sin_locale(caplog):
@@ -38,6 +31,7 @@ def test_configurar_i18n_sin_archivo_traduccion(caplog):
     """
     Verifica que cuando no existe el archivo .mo, se registra un warning
     """
+
     locale_actual = 'es_ES'
     with (patch('locale.getlocale', return_value=(locale_actual, None)),
           patch('os.path.exists', return_value=False)):
@@ -54,10 +48,12 @@ def test_configurar_i18n_instala_traduccion():
 
 def test_configurar_i18n_traduce_mensaje_real():
     """
-    Verifica que configurar_i18n carga y aplica las traducciones de la app.
+    Verifica que configurar_i18n carga y aplica las traducciones de la app con locale es_ES.
     """
 
-    configurar_i18n()
+    locale_actual = 'es_ES'
+    with patch('locale.getlocale', return_value=(locale_actual, None)):
+        configurar_i18n()
     assert argparse._(  # type: ignore
             'show this help message and exit') == 'Muestra este mensaje de ayuda y termina'
 
@@ -104,6 +100,7 @@ def test_run_estado_erroneo(caplog):
     # @formatter:off
     with (patch('sys.argv', ['soyyo', '--test']),
           patch('soyyo.app.configurar_logging'),
+          patch('soyyo.app.configurar_i18n'),
           caplog.at_level(logging.DEBUG),
           patch('soyyo.app.comprobar_estado', return_value='EstadoApp.IMPOSIBLE'),):
         # @formatter:on
@@ -120,6 +117,7 @@ def test_run_sistema_incompatible(caplog):
     # @formatter:off
     with (patch('sys.argv', ['soyyo', '--test']),
           patch('soyyo.app.configurar_logging'),
+          patch('soyyo.app.configurar_i18n'),
           caplog.at_level(logging.DEBUG),
           patch('soyyo.app.comprobar_estado', return_value=EstadoApp.SISTEMA_INCOMPATIBLE)):
         # @formatter:on
@@ -135,6 +133,7 @@ def test_run_sin_keyring(caplog):
     # @formatter:off
     with (patch('sys.argv', ['soyyo', '--test']),
           patch('soyyo.app.configurar_logging'),
+          patch('soyyo.app.configurar_i18n'),
           caplog.at_level(logging.DEBUG),
           patch('soyyo.app.comprobar_estado', return_value=EstadoApp.SIN_KEYRING)):
         # @formatter:on
@@ -150,6 +149,7 @@ def test_run_sin_pepper(caplog):
     # @formatter:off
     with (patch('sys.argv', ['soyyo', '--test']),
           patch('soyyo.app.configurar_logging'),
+          patch('soyyo.app.configurar_i18n'),
           caplog.at_level(logging.DEBUG),
           patch('soyyo.app.comprobar_estado', return_value=EstadoApp.SIN_PEPPER)):
         # @formatter:on
@@ -165,6 +165,7 @@ def test_run_fichero_corrupto(caplog):
     # @formatter:off
     with (patch('sys.argv', ['soyyo', '--test']),
           patch('soyyo.app.configurar_logging'),
+          patch('soyyo.app.configurar_i18n'),
           caplog.at_level(logging.DEBUG),
           patch('soyyo.app.comprobar_estado', return_value=EstadoApp.FICHERO_CORRUPTO)):
         # @formatter:on
@@ -180,6 +181,7 @@ def test_run_firma_invalida(caplog):
     # @formatter:off
     with (patch('sys.argv', ['soyyo', '--test']),
           patch('soyyo.app.configurar_logging'),
+          patch('soyyo.app.configurar_i18n'),
           caplog.at_level(logging.DEBUG),
           patch('soyyo.app.comprobar_estado', return_value=EstadoApp.FIRMA_INVALIDA)):
         # @formatter:on
@@ -195,6 +197,7 @@ def test_run_saliendo_ok(caplog):
     # @formatter:off
     with (patch('sys.argv', ['soyyo', '--test']),
           patch('soyyo.app.configurar_logging'),
+          patch('soyyo.app.configurar_i18n'),
           caplog.at_level(logging.DEBUG),
           patch('soyyo.app.comprobar_estado', return_value=EstadoApp.SALIENDO_OK)):
         # @formatter:on
@@ -210,6 +213,7 @@ def test_run_saliendo_error(caplog):
     # @formatter:off
     with (patch('sys.argv', ['soyyo', '--test']),
           patch('soyyo.app.configurar_logging'),
+          patch('soyyo.app.configurar_i18n'),
           caplog.at_level(logging.DEBUG),
           patch('soyyo.app.comprobar_estado', return_value=EstadoApp.SALIENDO_ERROR)):
         # @formatter:on
@@ -225,6 +229,7 @@ def test_main(caplog):
     # @formatter:off
     with (patch('sys.argv', ['soyyo']),
           patch('soyyo.app.configurar_logging'),
+          patch('soyyo.app.configurar_i18n'),
           caplog.at_level(logging.DEBUG)):
         # @formatter:on
         with pytest.raises(SystemExit) as exc:
@@ -239,6 +244,7 @@ def test_main_error_no_controlado(caplog):
     # @formatter:off
     with (patch('sys.argv', ['soyyo', '--test']),
           patch('soyyo.app.configurar_logging'),
+          patch('soyyo.app.configurar_i18n'),
           caplog.at_level(logging.DEBUG),
           patch('soyyo.app.comprobar_estado', side_effect=Exception),):
         # @formatter:on
@@ -254,6 +260,7 @@ def test_run_reset(caplog):
     # @formatter:off
     with (patch('sys.argv', ['soyyo', '--reset']),
           patch('soyyo.app.configurar_logging'),
+          patch('soyyo.app.configurar_i18n'),
           caplog.at_level(logging.DEBUG),
           patch('soyyo.app.comprobar_estado', return_value=EstadoApp.INICIALIZACION_CORRECTA),
           patch('soyyo.app.reset', return_value=EstadoApp.PRIMER_ARRANQUE),
@@ -274,6 +281,7 @@ def test_run_captura(caplog):
     # @formatter:off
     with (patch('sys.argv', ['soyyo', '--captura']),
           patch('soyyo.app.configurar_logging'),
+          patch('soyyo.app.configurar_i18n'),
           caplog.at_level(logging.DEBUG),
           patch('soyyo.app.comprobar_estado', return_value=EstadoApp.INICIALIZACION_CORRECTA),
           patch('soyyo.app.captura', return_value=EstadoApp.SALIENDO_OK)):
@@ -291,6 +299,7 @@ def test_run_lista(caplog):
     # @formatter:off
     with (patch('sys.argv', ['soyyo', '--lista']),
           patch('soyyo.app.configurar_logging'),
+          patch('soyyo.app.configurar_i18n'),
           caplog.at_level(logging.DEBUG),
           patch('soyyo.app.comprobar_estado', return_value=EstadoApp.INICIALIZACION_CORRECTA),
           patch('soyyo.app.lista', return_value=EstadoApp.SALIENDO_OK)):
